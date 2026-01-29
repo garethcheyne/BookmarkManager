@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Bookmark, BookmarkFilter, BookmarkMetadata, BookmarkOperation } from '@/types'
-import { bookmarksApi, metadataStorage, toBookmark, flattenBookmarkTree, isFolder } from '@/lib/chrome-api'
+import { bookmarksApi, metadataStorage, toBookmark, flattenBookmarkTree, isFolder, storageLocal } from '@/lib/chrome-api'
+import { toast } from '@/components/ui/use-toast'
+
+const EXPANDED_FOLDERS_KEY = 'expanded_folder_ids'
 
 interface BookmarkState {
   // Data
@@ -33,6 +36,7 @@ interface BookmarkActions {
   fetchBookmarks: () => Promise<void>
   fetchMetadata: () => Promise<void>
   refreshBookmarks: () => Promise<void>
+  loadExpandedFolders: () => Promise<void>
 
   // CRUD operations
   createBookmark: (parentId: string, title: string, url: string) => Promise<Bookmark>
@@ -125,6 +129,18 @@ export const useBookmarkStore = create<BookmarkStore>()(
       await get().fetchMetadata()
     },
 
+    loadExpandedFolders: async () => {
+      try {
+        const result = await storageLocal.get<{ [EXPANDED_FOLDERS_KEY]: string[] }>([EXPANDED_FOLDERS_KEY])
+        const savedIds = result[EXPANDED_FOLDERS_KEY]
+        if (savedIds && savedIds.length > 0) {
+          set({ expandedFolderIds: new Set(savedIds) })
+        }
+      } catch (error) {
+        console.error('Failed to load expanded folders:', error)
+      }
+    },
+
     // CRUD operations
     createBookmark: async (parentId, title, url) => {
       const node = await bookmarksApi.create({ parentId, title, url })
@@ -139,12 +155,22 @@ export const useBookmarkStore = create<BookmarkStore>()(
     },
 
     updateBookmark: async (id, changes) => {
+      // Prevent updating root folders (0=root, 1=bookmark bar, 2=other, 3=mobile)
+      if (['0', '1', '2', '3'].includes(id)) {
+        toast.error('Cannot modify root folders')
+        throw new Error("Can't modify the root bookmark folders")
+      }
       const node = await bookmarksApi.update(id, changes)
       await get().refreshBookmarks()
       return toBookmark(node)
     },
 
     deleteBookmark: async (id) => {
+      // Prevent deleting root folders (0=root, 1=bookmark bar, 2=other, 3=mobile)
+      if (['0', '1', '2', '3'].includes(id)) {
+        toast.error('Cannot delete root folders')
+        return
+      }
       const bookmark = get().getBookmarkById(id)
       if (bookmark && isFolder(bookmark)) {
         await bookmarksApi.removeTree(id)
@@ -162,6 +188,11 @@ export const useBookmarkStore = create<BookmarkStore>()(
     },
 
     moveBookmark: async (id, parentId, index) => {
+      // Prevent moving root folders (0=root, 1=bookmark bar, 2=other, 3=mobile)
+      if (['0', '1', '2', '3'].includes(id)) {
+        toast.error('Cannot move root folders')
+        return get().getBookmarkById(id)!
+      }
       const node = await bookmarksApi.move(id, { parentId, index })
       await get().refreshBookmarks()
       return toBookmark(node)
@@ -248,6 +279,8 @@ export const useBookmarkStore = create<BookmarkStore>()(
       set((state) => {
         const newExpanded = new Set(state.expandedFolderIds)
         newExpanded.add(id)
+        // Persist to storage
+        storageLocal.set({ [EXPANDED_FOLDERS_KEY]: Array.from(newExpanded) })
         return { expandedFolderIds: newExpanded }
       })
     },
@@ -256,6 +289,8 @@ export const useBookmarkStore = create<BookmarkStore>()(
       set((state) => {
         const newExpanded = new Set(state.expandedFolderIds)
         newExpanded.delete(id)
+        // Persist to storage
+        storageLocal.set({ [EXPANDED_FOLDERS_KEY]: Array.from(newExpanded) })
         return { expandedFolderIds: newExpanded }
       })
     },
@@ -284,11 +319,11 @@ export const useBookmarkStore = create<BookmarkStore>()(
 
     search: async (query) => {
       if (!query.trim()) {
-        set({ searchResults: [], isSearching: false })
+        set({ searchResults: [], isSearching: false, filter: { ...get().filter, query: '' } })
         return
       }
 
-      set({ isSearching: true })
+      set({ isSearching: true, filter: { ...get().filter, query } })
       try {
         const results = await bookmarksApi.search(query)
         set({ searchResults: results.map(toBookmark), isSearching: false })

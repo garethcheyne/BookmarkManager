@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Moon, Sun, Monitor, Github, Unlink, ExternalLink, FolderGit2, Link } from 'lucide-react'
+import { useEffect, useState, useMemo } from 'react'
+import { Moon, Sun, Monitor, Github, Unlink, ExternalLink, FolderGit2, Link, Folder, ChevronDown, ChevronRight, Tag, X, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { useSettingsStore, useGitHubStore, useBookmarkStore } from '@/store'
+import { REPO_COLORS } from '@/store/githubStore'
 import { GitHubConnectDialog } from '@/components/GitHubConnectDialog'
 import versionInfo from '@/version.json'
 
@@ -12,13 +15,64 @@ export function Options() {
     isAuthenticated,
     auth,
     folderShares,
+    repoColors,
+    tagLibrary,
     initialize: initializeGitHub,
     unlinkFolder,
-    logout
+    logout,
+    setRepoColor,
+    addTagToLibrary,
+    removeTagFromLibrary
   } = useGitHubStore()
   const { getBookmarkById, fetchBookmarks } = useBookmarkStore()
 
   const [githubConnectOpen, setGithubConnectOpen] = useState(false)
+  const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set())
+  const [newTag, setNewTag] = useState('')
+
+  // Group folder shares by repo/gist
+  const groupedShares = useMemo(() => {
+    const groups: Record<string, { type: 'gist' | 'repo'; resourceId: string; url: string; name: string; folders: typeof folderSharesList }> = {}
+
+    Object.values(folderShares).forEach(share => {
+      if (!groups[share.resourceId]) {
+        groups[share.resourceId] = {
+          type: share.type,
+          resourceId: share.resourceId,
+          url: share.url,
+          name: share.name,
+          folders: []
+        }
+      }
+      groups[share.resourceId].folders.push(share)
+    })
+
+    return Object.values(groups)
+  }, [folderShares])
+
+  const toggleRepoExpanded = (resourceId: string) => {
+    setExpandedRepos(prev => {
+      const next = new Set(prev)
+      if (next.has(resourceId)) {
+        next.delete(resourceId)
+      } else {
+        next.add(resourceId)
+      }
+      return next
+    })
+  }
+
+  const getColorForRepo = (resourceId: string) => {
+    const colorValue = repoColors[resourceId]
+    return REPO_COLORS.find(c => c.value === colorValue) || REPO_COLORS[0]
+  }
+
+  const handleAddTag = async () => {
+    if (newTag.trim()) {
+      await addTagToLibrary(newTag.trim())
+      setNewTag('')
+    }
+  }
 
   useEffect(() => {
     fetchSettings()
@@ -41,7 +95,7 @@ export function Options() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto p-8">
-        <h1 className="text-2xl font-bold mb-6">Bookmark Manager Pro Settings</h1>
+        <h1 className="text-2xl font-bold mb-6">BookStash Settings</h1>
 
         <Tabs defaultValue="settings" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
@@ -231,6 +285,55 @@ export function Options() {
               </div>
             </section>
 
+            {/* Tag Library Section */}
+            <section>
+              <h2 className="text-lg font-semibold mb-4">Tag Library</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Manage your tag library. Tags are suggested when editing bookmarks and sync across devices.
+              </p>
+              <div className="flex gap-2 mb-4">
+                <Input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="Add a new tag..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddTag()
+                    }
+                  }}
+                />
+                <Button onClick={handleAddTag} disabled={!newTag.trim()}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </div>
+              {tagLibrary.length === 0 ? (
+                <div className="text-center py-6 border rounded-lg bg-muted/30">
+                  <Tag className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground text-sm">No tags in library yet.</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Tags are automatically added when you tag bookmarks.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2 p-4 border rounded-lg bg-muted/30">
+                  {tagLibrary.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1 pl-3 pr-1 py-1">
+                      {tag}
+                      <button
+                        onClick={() => removeTagFromLibrary(tag)}
+                        className="ml-1 hover:bg-muted rounded-full p-0.5"
+                        title="Remove tag"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </section>
+
             {/* Reset Section */}
             <section className="border-t pt-6">
               <h2 className="text-lg font-semibold mb-4">Reset</h2>
@@ -278,10 +381,10 @@ export function Options() {
               )}
             </section>
 
-            {/* Connected Folders */}
+            {/* Connected Repos */}
             <section>
-              <h2 className="text-lg font-semibold mb-4">Connected Folders</h2>
-              {folderSharesList.length === 0 ? (
+              <h2 className="text-lg font-semibold mb-4">Connected Repositories</h2>
+              {groupedShares.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-muted/30">
                   <FolderGit2 className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                   <p className="text-muted-foreground">No folders connected to GitHub yet.</p>
@@ -291,57 +394,100 @@ export function Options() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {folderSharesList.map((share) => {
-                    const folder = getBookmarkById(share.folderId)
-                    const folderName = folder?.title || share.name || 'Unknown Folder'
+                  {groupedShares.map((group) => {
+                    const isExpanded = expandedRepos.has(group.resourceId)
+                    const repoColor = getColorForRepo(group.resourceId)
 
                     return (
-                      <div
-                        key={share.folderId}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            share.type === 'repo'
-                              ? 'bg-purple-100 dark:bg-purple-900/30'
-                              : 'bg-blue-100 dark:bg-blue-900/30'
-                          }`}>
-                            {share.type === 'repo' ? (
-                              <FolderGit2 className="h-5 w-5 text-purple-600" />
-                            ) : (
-                              <Link className="h-5 w-5 text-blue-600" />
-                            )}
+                      <div key={group.resourceId} className="border rounded-lg overflow-hidden">
+                        {/* Repo Header */}
+                        <div
+                          className="flex items-center justify-between p-4 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => toggleRepoExpanded(group.resourceId)}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="text-muted-foreground">
+                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </span>
+                            <div
+                              className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                              style={{ backgroundColor: repoColor.value + '20' }}
+                            >
+                              {group.type === 'repo' ? (
+                                <FolderGit2 className="h-5 w-5" style={{ color: repoColor.value }} />
+                              ) : (
+                                <Link className="h-5 w-5" style={{ color: repoColor.value }} />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{group.resourceId}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {group.type === 'repo' ? 'Repository' : 'Gist'} · {group.folders.length} folder{group.folders.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{folderName}</p>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {share.type === 'repo' ? 'Repository' : 'Gist'}: {share.resourceId}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Last synced: {formatDate(share.lastSynced)}
-                            </p>
+                          <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* Color Picker */}
+                            <div className="flex items-center gap-1 p-1 border rounded-lg bg-background">
+                              {REPO_COLORS.map((color) => (
+                                <button
+                                  key={color.value}
+                                  className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${
+                                    repoColor.value === color.value ? 'ring-2 ring-offset-2 ring-foreground' : ''
+                                  }`}
+                                  style={{ backgroundColor: color.value }}
+                                  title={color.name}
+                                  onClick={() => setRepoColor(group.resourceId, color.value)}
+                                />
+                              ))}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              asChild
+                              title="Open on GitHub"
+                            >
+                              <a href={group.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            asChild
-                            title="Open on GitHub"
-                          >
-                            <a href={share.url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleUnlink(share.folderId, folderName)}
-                            title="Unlink from GitHub"
-                          >
-                            <Unlink className="h-4 w-4 text-orange-500" />
-                          </Button>
-                        </div>
+
+                        {/* Folder List */}
+                        {isExpanded && (
+                          <div className="border-t">
+                            {group.folders.map((share) => {
+                              const folder = getBookmarkById(share.folderId)
+                              const folderName = folder?.title || share.name || 'Unknown Folder'
+
+                              return (
+                                <div
+                                  key={share.folderId}
+                                  className="flex items-center justify-between px-4 py-3 border-b last:border-b-0 hover:bg-muted/20"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0 pl-7">
+                                    <Folder className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium truncate">{folderName}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Last synced: {formatDate(share.lastSynced)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleUnlink(share.folderId, folderName)}
+                                    title="Unlink from GitHub"
+                                  >
+                                    <Unlink className="h-4 w-4 text-orange-500" />
+                                  </Button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -366,9 +512,12 @@ export function Options() {
         <section className="border-t pt-6 mt-8">
           <h2 className="text-lg font-semibold mb-4">About</h2>
           <div className="text-sm text-muted-foreground">
-            <p>Bookmark Manager Pro v{versionInfo.version}</p>
+            <p>BookStash v{versionInfo.version}</p>
             <p className="mt-2">
               A modern bookmark management extension with GitHub Gist/Repo sharing capabilities.
+            </p>
+            <p className="mt-2">
+              By Gareth Cheyne & Claude · <a href="https://www.err403.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">www.err403.com</a>
             </p>
           </div>
         </section>

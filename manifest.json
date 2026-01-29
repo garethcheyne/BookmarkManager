@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Bookmark Manager Pro",
-  "version": "26.1.29.21",
+  "name": "BookStash",
+  "version": "26.1.30.45",
   "description": "Modern bookmark management with GitHub Gist/Repo sharing capabilities",
   "permissions": [
     "bookmarks",
@@ -20,7 +20,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Bookmark Manager Pro"
+    "default_title": "BookStash"
   },
   "side_panel": {
     "default_path": "src/sidepanel/index.html"
@@ -39,5 +39,5 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "version_name": "2026-01-29-21"
+  "version_name": "2026-01-30-45"
 }

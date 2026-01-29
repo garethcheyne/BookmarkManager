@@ -11,7 +11,7 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 import { TagInput } from './TagInput'
-import { useBookmarkStore } from '@/store'
+import { useBookmarkStore, useGitHubStore } from '@/store'
 import type { Bookmark } from '@/types'
 
 interface EditBookmarkDialogProps {
@@ -22,26 +22,27 @@ interface EditBookmarkDialogProps {
 
 export function EditBookmarkDialog({ bookmark, open, onOpenChange }: EditBookmarkDialogProps) {
   const { updateBookmark, updateMetadata, metadata } = useBookmarkStore()
+  const { tagLibrary, addTagToLibrary } = useGitHubStore()
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Get all existing tags for suggestions
-  const allTags = Array.from(
-    new Set(Object.values(metadata).flatMap((m) => m.customTags || []))
-  )
+  // Combine tag library with existing tags from metadata for suggestions
+  const existingTags = Object.values(metadata).flatMap((m) => m.customTags || [])
+  const allTags = Array.from(new Set([...tagLibrary, ...existingTags])).sort()
 
+  // Reset form when dialog opens
   useEffect(() => {
-    if (bookmark) {
+    if (open && bookmark) {
       setTitle(bookmark.title || '')
       setUrl(bookmark.url || '')
       const bookmarkMeta = metadata[bookmark.id]
       setTags(bookmarkMeta?.customTags || [])
       setNotes(bookmarkMeta?.notes || '')
     }
-  }, [bookmark, metadata])
+  }, [open, bookmark, metadata])
 
   const handleSave = async () => {
     if (!bookmark) return
@@ -53,6 +54,13 @@ export function EditBookmarkDialog({ bookmark, open, onOpenChange }: EditBookmar
 
       // Update metadata (tags, notes)
       await updateMetadata(bookmark.id, { customTags: tags, notes })
+
+      // Add any new tags to the library
+      for (const tag of tags) {
+        if (!tagLibrary.includes(tag)) {
+          await addTagToLibrary(tag)
+        }
+      }
 
       onOpenChange(false)
     } catch (error) {

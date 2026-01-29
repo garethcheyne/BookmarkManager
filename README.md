@@ -1,55 +1,225 @@
+# BookStash
 
-# Chromium BookmarkManager
+<div align="center">
 
-Chromium BookmarkManager is a modern, feature-rich Chrome extension designed to make managing, organizing, and syncing your bookmarks effortless. It provides a clean, intuitive interface accessible from Chrome’s side panel, allowing you to create, edit, organize, and search bookmarks with advanced features like tagging, notes, and duplicate detection. 
+![BookStash Logo](assets/icon128.png)
 
-What sets this extension apart is its seamless integration with GitHub: you can sync selected bookmark folders to GitHub repositories or Gists, enabling cloud backup, sharing, and cross-device access. The extension supports importing/exporting bookmarks in JSON, offers a robust search with fuzzy matching, and provides a dark mode for comfortable browsing. All settings and folder sync connections are stored securely, with GitHub tokens kept only on your device for privacy.
+**Modern bookmark management for Chrome and Edge with GitHub integration**
 
-Whether you’re a power user with thousands of bookmarks or just want a better way to organize and back up your favorites, Chromium BookmarkManager brings professional-grade bookmark management to your browser, with open-source transparency and modern web technologies.
+[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-blue?logo=google-chrome)](https://chrome.google.com/webstore)
+[![Edge Add-ons](https://img.shields.io/badge/Edge-Add--ons-blue?logo=microsoft-edge)](https://microsoftedge.microsoft.com/addons)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+</div>
 
-## Key Features
+---
 
-- **Full Bookmark Management**: Create, edit, delete, and organize bookmarks and folders
-- **Modern Side Panel UI**: Access all features from a responsive, user-friendly interface
-- **GitHub Sync**: Backup and share bookmark folders to GitHub repositories or Gists
-- **Advanced Search**: Quickly find bookmarks with instant and fuzzy search
-- **Tags & Notes**: Add custom tags and notes for better organization
-- **Import/Export**: Move bookmarks in and out using JSON
-- **Duplicate Detection**: Identify and clean up duplicate bookmarks
-- **Cross-Device Sync**: Sync folder connections across Chrome browsers
-- **Dark/Light Mode**: Adapts to your system theme
+## Overview
+
+BookStash is a powerful bookmark management extension that brings professional-grade organization to your browser. Built with modern web technologies, it provides an intuitive interface for managing thousands of bookmarks with features like tagging, search, GitHub sync, and cross-device backup.
+
+**What makes BookStash special:**
+- 🎨 Beautiful, theme-aware UI (popup and side panel)
+- 🔄 Sync bookmark folders to GitHub Repositories or Gists
+- 🏷️ Add custom tags and notes to any bookmark
+- 🔍 Instant search with fuzzy matching
+- 📤 Import/Export bookmarks in JSON format
+- 🔁 Find and remove duplicate bookmarks
+- 🌙 Dark/Light mode support
+- ⚡ Lightning-fast performance with React 18
+- 🔒 Privacy-first: GitHub tokens stored locally only
+
+## Screenshots
+
+### Popup Interface
+The compact popup provides quick access to your bookmarks with the full feature set.
+
+### Side Panel
+Work alongside your browsing with the persistent side panel for easy bookmark management.
+
+### GitHub Sync
+Backup folders to GitHub and access them from any device or share with your team.
 
 ## Installation
 
-### From Source
+### From Chrome Web Store / Edge Add-ons
+*Coming soon - automated deployment in progress*
 
-1. Clone the repository:
+### From Source (Developers)
+
+1. **Clone the repository:**
    ```bash
-   git clone https://github.com/garethcheyne/Chromium-BookmarkManager.git
-   cd Chromium-BookmarkManager
+   git clone https://github.com/garethcheyne/BookmarkManager.git
+   cd BookmarkManager
    ```
 
-2. Install dependencies:
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 
-3. Build the extension:
+3. **Build the extension:**
    ```bash
    npm run build
    ```
 
-4. Load in Chrome:
-   - Navigate to `chrome://extensions/`
+4. **Load in Chrome/Edge:**
+   - Navigate to `chrome://extensions/` (Chrome) or `edge://extensions/` (Edge)
    - Enable "Developer mode"
    - Click "Load unpacked"
    - Select the `dist` folder
 
+## Features
+
+### 📁 Complete Bookmark Management
+- Create, edit, and delete bookmarks and folders
+- Drag-and-drop organization
+- Nested folder support
+- Right-click context menus
+- Keyboard shortcuts for power users
+
+### 🔍 Advanced Search
+- Instant search as you type
+- Fuzzy matching finds bookmarks even with typos
+- Search by title, URL, or tags
+- Recent searches history
+
+### 🏷️ Tags & Metadata
+- Add custom tags to any bookmark
+- Add notes and descriptions
+- Track access counts and last visit dates
+- Color-coded tags for visual organization
+
+### 🐙 GitHub Integration
+
+**Sync to Repositories:**
+- Push entire bookmark folders to GitHub repos
+- Automatic JSON formatting
+- Keeps folder structure organized
+- Perfect for team sharing or public bookmark collections
+
+**Sync to Gists:**
+- Quick backup to private or public Gists
+- Lightweight alternative to repositories
+- Easy sharing via Gist URL
+
+**Import from GitHub:**
+- Import bookmarks from any Gist or repository
+- Restore backups instantly
+- Merge bookmarks from multiple sources
+
+### 📊 Smart Features
+- **Duplicate Detection:** Find and remove duplicate URLs
+- **Import/Export:** Backup to JSON files
+- **Folder Badges:** Visual indicators for synced folders
+- **Trash Protection:** Confirm before deleting
+- **Theme Sync:** Follows system dark/light mode
+
+## Usage Guide
+
+### Basic Operations
+
+**Add a Bookmark:**
+1. Click the + icon in the toolbar
+2. Enter title and URL
+3. Choose a folder and add tags (optional)
+
+**Edit a Bookmark:**
+1. Right-click any bookmark
+2. Select "Edit"
+3. Update fields and save
+
+**Delete Items:**
+1. Select bookmarks/folders (Ctrl/Cmd + Click)
+2. Press Delete key or click trash icon
+3. Confirm if prompted (configurable)
+
+### GitHub Sync Setup
+
+**1. Get a GitHub Token:**
+- Go to [GitHub Settings → Personal Access Tokens](https://github.com/settings/tokens)
+- Click "Generate new token (classic)"
+- Select scopes: `repo` (for repositories) and `gist` (for gists)
+- Copy the token
+
+**2. Connect BookStash:**
+- Click the GitHub icon in BookStash
+- Select "Connect GitHub"
+- Paste your token
+- Click "Connect"
+
+**3. Sync a Folder:**
+- Right-click any bookmark folder
+- Choose "Share to GitHub"
+- Select "Save to Repository" or "Share as Gist"
+- Choose existing or create new
+- Folder will show a GitHub badge when synced
+
+**4. Push Updates:**
+- Right-click a synced folder
+- Select "Push to Repo/Gist"
+- Changes are uploaded to GitHub
+
+**5. Pull Updates:**
+- Right-click a synced folder
+- Select "Pull from Repo/Gist"
+- Remote changes are merged locally
+
+### Keyboard Shortcuts
+
+- `Ctrl/Cmd + K` - Focus search
+- `Ctrl/Cmd + B` - New bookmark
+- `Ctrl/Cmd + N` - New folder
+- `Delete` - Delete selected items
+- `Esc` - Clear search/selection
+
+### Settings
+
+Access settings via the gear icon:
+- **Appearance:** Theme (light/dark/system)
+- **Behavior:** Confirm deletes, open links in new tabs
+- **GitHub:** Manage connection and sync settings
+- **Data:** Export/import all bookmarks
+
 ## Development
 
+### Tech Stack
+
+- **React 18** + **TypeScript** - Modern UI with type safety
+- **Vite** - Lightning-fast builds and HMR
+- **Zustand** - Lightweight state management
+- **Tailwind CSS** - Utility-first styling
+- **Radix UI** + **shadcn/ui** - Accessible component primitives
+- **@crxjs/vite-plugin** - Chrome extension tooling
+
+### Project Structure
+
+```
+src/
+├── background/         # Service worker for bookmark events
+├── components/         # React components
+│   ├── ui/            # Reusable UI components (shadcn)
+│   ├── BookmarkTree.tsx
+│   ├── SearchBar.tsx
+│   └── ...            # Feature-specific components
+├── lib/               # Utilities and API clients
+│   ├── chrome-api.ts  # Chrome APIs wrapper
+│   ├── github-api.ts  # GitHub REST API
+│   └── utils.ts       # Helper functions
+├── options/           # Settings page
+├── popup/             # Popup interface
+├── sidepanel/         # Side panel interface
+├── store/             # State management
+│   ├── bookmarkStore.ts
+│   ├── githubStore.ts
+│   └── settingsStore.ts
+└── types/             # TypeScript definitions
+```
+
+### Development Commands
+
 ```bash
-# Start development server with hot reload
+# Start development with hot reload
 npm run dev
 
 # Build for production
@@ -57,79 +227,98 @@ npm run build
 
 # Type checking
 npm run lint
+
+# Format code
+npm run format
+
+# Run tests
+npm test
+
+# Build and prepare release
+npm run release
 ```
 
-### Project Structure
+### Building from Source
 
-```
-src/
-├── background/        # Service worker for bookmark events
-├── components/        # React components
-│   ├── ui/           # shadcn/ui base components
-│   └── ...           # Feature components
-├── lib/              # Utilities and API wrappers
-│   ├── chrome-api.ts # Chrome APIs wrapper
-│   ├── github-api.ts # GitHub REST API client
-│   └── github-auth.ts# GitHub authentication
-├── options/          # Settings page
-├── popup/            # Popup UI
-├── sidepanel/        # Side panel UI
-├── store/            # Zustand state management
-│   ├── bookmarkStore.ts
-│   ├── settingsStore.ts
-│   └── githubStore.ts
-└── types/            # TypeScript type definitions
+```bash
+# Install dependencies
+npm install
+
+# Build the extension
+npm run build
+
+# Output is in dist/ folder
 ```
 
-## GitHub Integration
+### Contributing
 
-### Connecting to GitHub
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
 
-1. Create a GitHub Personal Access Token at [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Required scopes: `repo`, `gist`
-3. Enter the token in Settings > GitHub Sync > Connect GitHub
+## Deployment
 
-### Syncing Folders
+BookStash uses automated deployment to both Chrome Web Store and Edge Add-ons via GitHub Actions.
 
-1. Right-click any bookmark folder
-2. Select "Share to GitHub" > "Save to Repository" or "Share as Gist"
-3. Choose an existing repo/gist or create a new one
-4. The folder will show a green badge indicating it's synced
-
-### Sync Behavior
-
-- **Folder connections** sync across Chrome browsers automatically
-- **GitHub tokens** are stored locally only (for security)
-- Each folder saves to a **separate JSON file** (`bookmarks/{folder-name}.json`)
-- Use "Sync to Repo/Gist" from the context menu to push changes
-
-## Tech Stack
-
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool
-- **@crxjs/vite-plugin** - Chrome extension development
-- **Zustand** - State management
-- **Radix UI / shadcn/ui** - UI components
-- **Tailwind CSS** - Styling
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full setup instructions including:
+- Getting API credentials
+- Setting up GitHub secrets
+- Triggering releases
+- Troubleshooting
 
 ## Permissions
 
-The extension requires the following Chrome permissions:
+BookStash requires these Chrome permissions:
 
-- `bookmarks` - Read and modify bookmarks
-- `storage` - Store settings and sync data
-- `sidePanel` - Display the side panel interface
-- `identity` - (Future) OAuth authentication
+- **bookmarks** - Read and modify your bookmarks
+- **storage** - Store settings and sync folder connections
+- **sidePanel** - Display the side panel interface
+- **identity** - (Optional) For future OAuth features
+
+Your privacy is important:
+- GitHub tokens are stored locally only
+- No data is sent to third parties
+- All sync is direct to your GitHub account
 
 ## Version Format
 
-Versions follow the format `YYYY-MM-DD-XX` where:
-- `YYYY-MM-DD` is the build date
-- `XX` is the build number for that day
+Versions use date-based format: `YY.M.DD.BUILD`
 
-The manifest version uses `YY.M.DD.XX` format for Chrome compatibility.
+Example: `26.1.30.42`
+- `26` = Year (2026)
+- `1` = Month (January)
+- `30` = Day
+- `42` = Build number
+
+## Roadmap
+
+- [ ] Chrome Web Store release
+- [ ] Edge Add-ons release
+- [ ] Firefox support
+- [ ] OAuth GitHub authentication
+- [ ] Bookmark collection sharing
+- [ ] AI-powered bookmark organization
+- [ ] Browser history integration
+- [ ] Mobile companion app
+
+## Support
+
+- 🐛 [Report bugs](https://github.com/garethcheyne/BookmarkManager/issues)
+- 💡 [Request features](https://github.com/garethcheyne/BookmarkManager/issues)
+- 📧 [Contact developer](mailto:gareth.cheyne@gmail.com)
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details
+
+---
+
+<div align="center">
+
+**Built with ❤️ by [Gareth Cheyne](https://www.err403.com) & Claude**
+
+[Report Bug](https://github.com/garethcheyne/BookmarkManager/issues) · [Request Feature](https://github.com/garethcheyne/BookmarkManager/issues)
+
+</div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Settings,
   Moon,
@@ -15,7 +15,9 @@ import {
   User,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SearchBar, BookmarkTree, SearchResults } from '@/components'
+import { Toaster } from '@/components/ui/toaster'
+import { SearchBar, BookmarkTree, SearchResults, type SearchBarHandle } from '@/components'
+import { useKeyboardShortcuts } from '@/hooks'
 import { AddBookmarkDialog } from '@/components/AddBookmarkDialog'
 import { AddFolderDialog } from '@/components/AddFolderDialog'
 import { ImportExportDialog } from '@/components/ImportExportDialog'
@@ -39,9 +41,12 @@ import {
 import versionInfo from '@/version.json'
 
 export function SidePanel() {
-  const { searchResults, filter, selectedIds, deleteBookmarks, deselectAll } = useBookmarkStore()
+  const { searchResults, filter, selectedIds, deleteBookmarks, deselectAll, clearFilter } = useBookmarkStore()
   const { settings, fetchSettings, updateSettings, getEffectiveTheme } = useSettingsStore()
   const { isAuthenticated, auth, initialize: initializeGitHub } = useGitHubStore()
+
+  // Refs
+  const searchBarRef = useRef<SearchBarHandle>(null)
 
   const [addBookmarkOpen, setAddBookmarkOpen] = useState(false)
   const [addFolderOpen, setAddFolderOpen] = useState(false)
@@ -61,15 +66,6 @@ export function SidePanel() {
     initializeGitHub()
   }, [fetchSettings, initializeGitHub])
 
-  const handleOpenOptions = () => {
-    chrome.runtime.openOptionsPage()
-  }
-
-  const toggleTheme = () => {
-    const currentTheme = getEffectiveTheme()
-    updateSettings({ theme: currentTheme === 'dark' ? 'light' : 'dark' })
-  }
-
   const handleDelete = async () => {
     if (selectedIds.size === 0) return
     if (settings.confirmDelete) {
@@ -82,13 +78,38 @@ export function SidePanel() {
     deselectAll()
   }
 
+  const handleOpenOptions = () => {
+    chrome.runtime.openOptionsPage()
+  }
+
+  const toggleTheme = () => {
+    const currentTheme = getEffectiveTheme()
+    updateSettings({ theme: currentTheme === 'dark' ? 'light' : 'dark' })
+  }
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onFocusSearch: () => searchBarRef.current?.focus(),
+    onClearSearch: () => {
+      searchBarRef.current?.clear()
+      clearFilter()
+    },
+    onNewBookmark: () => setAddBookmarkOpen(true),
+    onDelete: handleDelete,
+  })
+
   const showSearchResults = filter.query && searchResults.length >= 0
 
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Compact single toolbar for side panel mode */}
       <div className="flex items-center gap-1 p-2 border-b bg-muted/50">
+
+        <div className="bg-gray-600 p-1 rounded-full border-2 border-orange-500">
+          <img src="/icons/icon32.png" alt="BookStash" className="w-4 h-4" />
+        </div>
         {/* Add buttons */}
+
         <Button
           variant="ghost"
           size="icon"
@@ -253,6 +274,7 @@ export function SidePanel() {
       <ShareToRepoDialog open={shareToRepoOpen} onOpenChange={setShareToRepoOpen} />
       <ImportFromGistDialog open={importFromGistOpen} onOpenChange={setImportFromGistOpen} />
       <ImportFromRepoDialog open={importFromRepoOpen} onOpenChange={setImportFromRepoOpen} />
+      <Toaster />
     </div>
   )
 }

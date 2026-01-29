@@ -1,6 +1,6 @@
 export { BookmarkItem } from './BookmarkItem'
 export { BookmarkTree } from './BookmarkTree'
-export { SearchBar } from './SearchBar'
+export { SearchBar, type SearchBarHandle } from './SearchBar'
 export { SearchResults } from './SearchResults'
 export { TagInput } from './TagInput'
 export { BookmarkContextMenu } from './BookmarkContextMenu'

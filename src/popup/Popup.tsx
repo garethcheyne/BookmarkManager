@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   PanelRightOpen,
   Settings,
@@ -13,7 +13,9 @@ import {
   FolderGit2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SearchBar, BookmarkTree, SearchResults } from '@/components'
+import { Toaster } from '@/components/ui/toaster'
+import { SearchBar, BookmarkTree, SearchResults, type SearchBarHandle } from '@/components'
+import { useKeyboardShortcuts } from '@/hooks'
 import { useBookmarkStore, useSettingsStore, useGitHubStore } from '@/store'
 import { GitHubConnectDialog } from '@/components/GitHubConnectDialog'
 import { ShareToGistDialog } from '@/components/ShareToGistDialog'
@@ -35,9 +37,12 @@ import {
 import versionInfo from '@/version.json'
 
 export function Popup() {
-  const { searchResults, filter } = useBookmarkStore()
+  const { searchResults, filter, clearFilter } = useBookmarkStore()
   const { fetchSettings, updateSettings, getEffectiveTheme } = useSettingsStore()
   const { isAuthenticated, auth, initialize: initializeGitHub } = useGitHubStore()
+
+  // Refs
+  const searchBarRef = useRef<SearchBarHandle>(null)
 
   // Dialog states
   const [githubConnectOpen, setGithubConnectOpen] = useState(false)
@@ -53,6 +58,15 @@ export function Popup() {
     fetchSettings()
     initializeGitHub()
   }, [fetchSettings, initializeGitHub])
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onFocusSearch: () => searchBarRef.current?.focus(),
+    onClearSearch: () => {
+      searchBarRef.current?.clear()
+      clearFilter()
+    },
+  })
 
   const handleOpenSidePanel = async () => {
     // Call sidePanel.open() directly from popup - this IS a user gesture context
@@ -76,10 +90,16 @@ export function Popup() {
   const showSearchResults = filter.query && searchResults.length >= 0
 
   return (
-    <div className="w-[480px] h-[600px] flex flex-col bg-background rounded-lg overflow-hidden">
+    <div className="w-[480px] h-[580px] flex flex-col bg-background overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between p-3 border-b">
-        <h1 className="text-lg font-semibold">Bookmarks</h1>
+      <header className="flex items-center justify-between pr-2 py-1.5 pl-4 border-b">
+        <div className="flex items-center gap-2">
+          <div className="bg-gray-600 p-1 rounded-full border-2 border-orange-500">
+            <img src="/icons/icon32.png" alt="BookStash" className="w-4 h-4" />
+          </div>
+          <h1 className="text-base font-semibold">BookStash</h1>
+        </div>
+
         <div className="flex items-center gap-1">
           {/* Tools Dropdown */}
           <DropdownMenu>
@@ -176,17 +196,17 @@ export function Popup() {
 
       {/* Search */}
       <div className="p-3 border-b">
-        <SearchBar />
+        <SearchBar ref={searchBarRef} />
       </div>
 
       {/* Content */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 min-h-0 overflow-hidden">
         {showSearchResults ? <SearchResults /> : <BookmarkTree />}
       </main>
 
       {/* Footer */}
       <footer className="p-2 border-t text-xs text-muted-foreground text-center">
-        Bookmark Manager Pro v{versionInfo.version}
+        BookStash v{versionInfo.version}
       </footer>
 
       {/* Dialogs */}
@@ -208,6 +228,7 @@ export function Popup() {
       <ShareToRepoDialog open={shareToRepoOpen} onOpenChange={setShareToRepoOpen} />
       <ImportFromGistDialog open={importFromGistOpen} onOpenChange={setImportFromGistOpen} />
       <ImportFromRepoDialog open={importFromRepoOpen} onOpenChange={setImportFromRepoOpen} />
+      <Toaster />
     </div>
   )
 }

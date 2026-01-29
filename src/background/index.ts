@@ -8,9 +8,21 @@ interface StoredMetadata {
   lastAccessed?: number
 }
 
+interface FolderShare {
+  folderId: string
+  type: 'gist' | 'repo'
+  resourceId: string
+  url: string
+  name: string
+  filePath?: string
+  lastSynced: string
+}
+
+type FolderShares = Record<string, FolderShare>
+
 // Listen for extension installation
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('Bookmark Manager Pro installed:', details.reason)
+  console.log('BookStash installed:', details.reason)
 
   if (details.reason === 'install') {
     // First time installation
@@ -32,9 +44,33 @@ chrome.bookmarks.onRemoved.addListener((id, removeInfo) => {
   chrome.storage.local.remove(`bookmark_meta_${id}`)
 })
 
-chrome.bookmarks.onChanged.addListener((id, changeInfo) => {
+chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
   console.log('Bookmark changed:', id, changeInfo)
   notifyUI('bookmark-changed', { id, changeInfo })
+
+  // Check if this is a linked folder and update the share name
+  if (changeInfo.title) {
+    try {
+      const result = await chrome.storage.sync.get('folder_shares')
+      const folderShares: FolderShares = (result.folder_shares as FolderShares) || ({} as FolderShares)
+      if (folderShares[id]) {
+        // Update the folder share name
+        const share = folderShares[id]
+        const sanitizedName = changeInfo.title.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase()
+        const newFilePath = share.type === 'repo' ? `bookmarks/${sanitizedName}.json` : undefined
+
+        folderShares[id] = {
+          ...share,
+          name: changeInfo.title,
+          filePath: newFilePath || share.filePath,
+        }
+        await chrome.storage.sync.set({ folder_shares: folderShares })
+        console.log('Updated folder share for renamed folder:', changeInfo.title)
+      }
+    } catch (error) {
+      console.error('Failed to update folder share on rename:', error)
+    }
+  }
 })
 
 chrome.bookmarks.onMoved.addListener((id, moveInfo) => {
@@ -83,6 +119,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       return true
 
+    case 'update-folder-share-name':
+      updateFolderShareName(message.folderId, message.newName).then(() => {
+        sendResponse({ success: true })
+      }).catch((error) => {
+        sendResponse({ success: false, error: error.message })
+      })
+      return true
+
     default:
       console.warn('Unknown message type:', message.type)
       sendResponse({ success: false, error: 'Unknown message type' })
@@ -116,4 +160,23 @@ async function trackBookmarkAccess(bookmarkId: string) {
   })
 }
 
-console.log('Bookmark Manager Pro background service worker started')
+// Update folder share name when folder is renamed
+async function updateFolderShareName(folderId: string, newName: string) {
+  const result = await chrome.storage.sync.get('folder_shares')
+  const folderShares: FolderShares = (result.folder_shares as FolderShares) || ({} as FolderShares)
+
+  if (folderShares[folderId]) {
+    const share: FolderShare = folderShares[folderId]
+    const sanitizedName = newName.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase()
+    const newFilePath = share.type === 'repo' ? `bookmarks/${sanitizedName}.json` : undefined
+
+    folderShares[folderId] = {
+      ...share,
+      name: newName,
+      filePath: newFilePath || share.filePath,
+    }
+    await chrome.storage.sync.set({ folder_shares: folderShares })
+  }
+}
+
+console.log('BookStash background service worker started')

@@ -20,6 +20,7 @@ import {
   FolderGit2,
   RefreshCw,
   Unlink,
+  Download,
 } from 'lucide-react'
 import type { Bookmark } from '@/types'
 import { useBookmarkStore } from '@/store'
@@ -34,6 +35,7 @@ interface BookmarkContextMenuProps {
   onShareToGist?: () => void
   onShareToRepo?: () => void
   onSyncToGitHub?: () => void
+  onPullFromGitHub?: () => void
   onUnlinkFromGitHub?: () => void
   folderShare?: FolderShare
 }
@@ -47,6 +49,7 @@ export function BookmarkContextMenu({
   onShareToGist,
   onShareToRepo,
   onSyncToGitHub,
+  onPullFromGitHub,
   onUnlinkFromGitHub,
   folderShare,
 }: BookmarkContextMenuProps) {
@@ -133,7 +136,11 @@ export function BookmarkContextMenu({
           <>
             <ContextMenuItem onClick={onSyncToGitHub}>
               <RefreshCw className="mr-2 h-4 w-4" />
-              Sync to {folderShare.type === 'gist' ? 'Gist' : 'Repo'}
+              Push to {folderShare.type === 'gist' ? 'Gist' : 'Repo'}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={onPullFromGitHub}>
+              <Download className="mr-2 h-4 w-4" />
+              Pull from {folderShare.type === 'gist' ? 'Gist' : 'Repo'}
             </ContextMenuItem>
             <ContextMenuItem onClick={onUnlinkFromGitHub} className="text-orange-600">
               <Unlink className="mr-2 h-4 w-4" />

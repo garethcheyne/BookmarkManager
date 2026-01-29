@@ -1,14 +1,16 @@
-import { useState, useCallback } from 'react'
-import { Bookmark as BookmarkIcon, Folder, ChevronRight, ChevronDown, ExternalLink, Github } from 'lucide-react'
-import { exportToJson } from '@/lib/import-export'
+import { useState, useCallback, useRef } from 'react'
+import { Bookmark as BookmarkIcon, Folder, ChevronRight, ChevronDown, ExternalLink, Github, Loader2 } from 'lucide-react'
+import { exportToJson, importFromJson } from '@/lib/import-export'
 import { cn } from '@/lib/utils'
 import type { Bookmark } from '@/types'
 import { useBookmarkStore, useGitHubStore } from '@/store'
+import { REPO_COLORS } from '@/store/githubStore'
 import { BookmarkContextMenu } from './BookmarkContextMenu'
 import { EditBookmarkDialog } from './EditBookmarkDialog'
 import { ShareToGistDialog } from './ShareToGistDialog'
 import { ShareToRepoDialog } from './ShareToRepoDialog'
 import { Badge } from './ui/badge'
+import { toast } from './ui/use-toast'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,14 +45,21 @@ export function BookmarkItem({
     getChildrenOf,
     deleteBookmark,
     getBookmarkById,
+    moveBookmark,
+    fetchBookmarks,
   } = useBookmarkStore()
 
-  const { isAuthenticated, getFolderShare, unlinkFolder, updateFolderSyncTime, saveToRepo } = useGitHubStore()
+  const { isAuthenticated, getFolderShare, unlinkFolder, updateFolderSyncTime, saveToRepo, updateGist, getRepoColor, pullFromRepo } = useGitHubStore()
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [shareToGistOpen, setShareToGistOpen] = useState(false)
   const [shareToRepoOpen, setShareToRepoOpen] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [isPulling, setIsPulling] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragOver, setDragOver] = useState<'above' | 'below' | 'inside' | null>(null)
+  const itemRef = useRef<HTMLDivElement>(null)
 
   const isFolder = !bookmark.url
   const isSelected = selectedIds.has(bookmark.id)
@@ -59,6 +68,7 @@ export function BookmarkItem({
   const bookmarkMeta = metadata[bookmark.id]
   const tags = bookmarkMeta?.customTags || []
   const folderShare = isFolder ? getFolderShare(bookmark.id) : undefined
+  const isRootFolder = ['0', '1', '2', '3'].includes(bookmark.id)
 
   const handleClick = (e: React.MouseEvent) => {
     if (isFolder) {
@@ -82,10 +92,14 @@ export function BookmarkItem({
   const handleSyncToGitHub = useCallback(async () => {
     if (!folderShare || !isFolder) return
 
+    setIsSyncing(true)
     try {
       // Get folder contents
       const folder = getBookmarkById(bookmark.id)
-      if (!folder?.children) return
+      if (!folder?.children) {
+        toast.warning('Empty folder', 'No bookmarks to sync')
+        return
+      }
 
       // Export to JSON
       const content = await exportToJson(folder.children, {
@@ -99,33 +113,158 @@ export function BookmarkItem({
         // Parse owner/repo from resourceId
         const [owner, repo] = folderShare.resourceId.split('/')
         await saveToRepo(owner, repo, content, `Sync ${bookmark.title}`, folderShare.filePath)
+      } else if (folderShare.type === 'gist') {
+        // Gist sync support
+        await updateGist(folderShare.resourceId, content)
       }
-      // TODO: Add gist sync support
 
       await updateFolderSyncTime(bookmark.id)
-      alert('Synced successfully!')
+      toast.success('Synced successfully!', `${bookmark.title} synced to GitHub`)
     } catch (error) {
       console.error('Sync failed:', error)
-      alert('Sync failed: ' + (error as Error).message)
+      toast.error('Sync failed', (error as Error).message)
+    } finally {
+      setIsSyncing(false)
     }
-  }, [folderShare, isFolder, bookmark.id, bookmark.title, getBookmarkById, saveToRepo, updateFolderSyncTime])
+  }, [folderShare, isFolder, bookmark.id, bookmark.title, getBookmarkById, saveToRepo, updateGist, updateFolderSyncTime])
 
   const handleUnlinkFromGitHub = useCallback(async () => {
     if (!folderShare) return
     if (confirm(`Unlink "${bookmark.title}" from GitHub? This won't delete the file on GitHub.`)) {
       await unlinkFolder(bookmark.id)
+      toast.success('Unlinked', `${bookmark.title} unlinked from GitHub`)
     }
   }, [folderShare, bookmark.id, bookmark.title, unlinkFolder])
 
+  const handlePullFromGitHub = useCallback(async () => {
+    if (!folderShare || !isFolder) return
+
+    if (!confirm(`Pull from GitHub? This will replace all bookmarks in "${bookmark.title}" with the content from GitHub.`)) {
+      return
+    }
+
+    setIsPulling(true)
+    try {
+      const content = await pullFromRepo(bookmark.id)
+      if (!content) {
+        toast.error('Pull failed', 'Could not fetch content from GitHub')
+        return
+      }
+
+      // Import the content into this folder with replace strategy
+      const result = await importFromJson(content, {
+        targetFolderId: bookmark.id,
+        strategy: 'replace',
+        skipDuplicates: false,
+        preserveTags: true,
+      })
+
+      if (result.errors.length > 0) {
+        console.warn('Import errors:', result.errors)
+        toast.warning('Partial import', `Imported ${result.imported} bookmarks with ${result.errors.length} errors`)
+      } else {
+        toast.success('Pulled successfully!', `Imported ${result.imported} bookmarks from GitHub`)
+      }
+
+      await updateFolderSyncTime(bookmark.id)
+      await fetchBookmarks() // Refresh the UI
+    } catch (error) {
+      console.error('Pull failed:', error)
+      toast.error('Pull failed', (error as Error).message)
+    } finally {
+      setIsPulling(false)
+    }
+  }, [folderShare, isFolder, bookmark.id, bookmark.title, pullFromRepo, updateFolderSyncTime, fetchBookmarks])
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('bookmark/id', bookmark.id)
+    e.dataTransfer.setData('bookmark/parentId', bookmark.parentId || '')
+    e.dataTransfer.effectAllowed = 'move'
+    setIsDragging(true)
+  }
+
+  const handleDragEnd = () => {
+    setIsDragging(false)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedId = e.dataTransfer.types.includes('bookmark/id')
+    if (!draggedId) return
+
+    const rect = itemRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const y = e.clientY - rect.top
+    const height = rect.height
+
+    if (isFolder && y > height * 0.25 && y < height * 0.75) {
+      setDragOver('inside')
+    } else if (y < height * 0.5) {
+      setDragOver('above')
+    } else {
+      setDragOver('below')
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOver(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedId = e.dataTransfer.getData('bookmark/id')
+    if (!draggedId || draggedId === bookmark.id) {
+      setDragOver(null)
+      return
+    }
+
+    try {
+      if (dragOver === 'inside' && isFolder) {
+        // Move into this folder
+        await moveBookmark(draggedId, bookmark.id)
+        toast.success('Moved', 'Bookmark moved successfully')
+      } else {
+        // Move to same parent, reorder
+        const targetParentId = bookmark.parentId || '1'
+        const siblings = getChildrenOf(targetParentId)
+        const targetIndex = siblings.findIndex(s => s.id === bookmark.id)
+        const newIndex = dragOver === 'above' ? targetIndex : targetIndex + 1
+        await moveBookmark(draggedId, targetParentId, newIndex)
+        toast.success('Moved', 'Bookmark reordered successfully')
+      }
+    } catch (error) {
+      toast.error('Move failed', (error as Error).message)
+    }
+
+    setDragOver(null)
+  }
+
   const itemContent = (
     <div
+      ref={itemRef}
       className={cn(
-        'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors group',
+        'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors group relative',
         'hover:bg-accent',
-        isSelected && 'bg-accent'
+        isSelected && 'bg-accent',
+        isDragging && 'opacity-50',
+        dragOver === 'inside' && 'bg-accent ring-2 ring-primary',
+        dragOver === 'above' && 'drop-target-above',
+        dragOver === 'below' && 'drop-target-below'
       )}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       onClick={handleClick}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Expand/collapse indicator for folders */}
       {isFolder ? (
@@ -149,15 +288,27 @@ export function BookmarkItem({
       )}
 
       {/* GitHub shared indicator badge */}
-      {isFolder && folderShare && (
-        <span
-          className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400 text-[10px] flex-shrink-0"
-          title={`Synced to ${folderShare.type === 'gist' ? 'Gist' : 'Repo'}: ${folderShare.name}`}
-        >
-          <Github className="h-3 w-3" />
-          <span className="hidden sm:inline">{folderShare.type === 'gist' ? 'Gist' : 'Repo'}</span>
-        </span>
-      )}
+      {isFolder && folderShare && (() => {
+        const colorValue = getRepoColor(folderShare.resourceId) || REPO_COLORS[0].value
+        const isWorking = isSyncing || isPulling
+        return (
+          <span
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] flex-shrink-0"
+            style={{
+              backgroundColor: colorValue + '20',
+              color: colorValue
+            }}
+            title={`Synced to ${folderShare.type === 'gist' ? 'Gist' : 'Repo'}: ${folderShare.name}`}
+          >
+            {isWorking ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Github className="h-3 w-3" />
+            )}
+            <span className="hidden sm:inline">{folderShare.type === 'gist' ? 'Gist' : 'Repo'}</span>
+          </span>
+        )
+      })()}
 
       {/* Title and tags */}
       <div className="flex-1 min-w-0">
@@ -187,19 +338,25 @@ export function BookmarkItem({
 
   return (
     <div className="select-none">
-      <BookmarkContextMenu
-        bookmark={bookmark}
-        onEdit={() => setEditDialogOpen(true)}
-        onDelete={() => setDeleteDialogOpen(true)}
-        onAddTags={() => setEditDialogOpen(true)}
-        onShareToGist={isAuthenticated && isFolder ? () => setShareToGistOpen(true) : undefined}
-        onShareToRepo={isAuthenticated && isFolder ? () => setShareToRepoOpen(true) : undefined}
-        onSyncToGitHub={isAuthenticated && folderShare ? handleSyncToGitHub : undefined}
-        onUnlinkFromGitHub={isAuthenticated && folderShare ? handleUnlinkFromGitHub : undefined}
-        folderShare={folderShare}
-      >
-        {itemContent}
-      </BookmarkContextMenu>
+      {isRootFolder ? (
+        // Don't show context menu for root folders
+        itemContent
+      ) : (
+        <BookmarkContextMenu
+          bookmark={bookmark}
+          onEdit={() => setEditDialogOpen(true)}
+          onDelete={() => setDeleteDialogOpen(true)}
+          onAddTags={() => setEditDialogOpen(true)}
+          onShareToGist={isAuthenticated && isFolder ? () => setShareToGistOpen(true) : undefined}
+          onShareToRepo={isAuthenticated && isFolder ? () => setShareToRepoOpen(true) : undefined}
+          onSyncToGitHub={isAuthenticated && folderShare ? handleSyncToGitHub : undefined}
+          onPullFromGitHub={isAuthenticated && folderShare ? handlePullFromGitHub : undefined}
+          onUnlinkFromGitHub={isAuthenticated && folderShare ? handleUnlinkFromGitHub : undefined}
+          folderShare={folderShare}
+        >
+          {itemContent}
+        </BookmarkContextMenu>
+      )}
 
       {/* Children */}
       {isFolder && isExpanded && showChildren && (

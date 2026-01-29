@@ -1,0 +1,80 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 26.1.30.50)'
+        required: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Prepare release
+        run: node scripts/prepare-release.js
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Create release package
+        run: |
+          cd dist
+          zip -r ../bookstash-extension.zip .
+          cd ..
+
+      - name: Upload to Chrome Web Store
+        if: ${{ secrets.CHROME_CLIENT_ID && secrets.CHROME_CLIENT_SECRET && secrets.CHROME_REFRESH_TOKEN && secrets.CHROME_EXTENSION_ID }}
+        run: |
+          npx chrome-webstore-upload-cli@3 upload \
+            --source bookstash-extension.zip \
+            --extension-id ${{ secrets.CHROME_EXTENSION_ID }} \
+            --client-id ${{ secrets.CHROME_CLIENT_ID }} \
+            --client-secret ${{ secrets.CHROME_CLIENT_SECRET }} \
+            --refresh-token ${{ secrets.CHROME_REFRESH_TOKEN }} \
+            --auto-publish
+
+      - name: Upload to Edge Add-ons Store
+        if: ${{ secrets.EDGE_CLIENT_ID && secrets.EDGE_CLIENT_SECRET && secrets.EDGE_PRODUCT_ID }}
+        run: |
+          npx edge-addons-upload@1 \
+            --product-id ${{ secrets.EDGE_PRODUCT_ID }} \
+            --client-id ${{ secrets.EDGE_CLIENT_ID }} \
+            --client-secret ${{ secrets.EDGE_CLIENT_SECRET }} \
+            --access-token-url ${{ secrets.EDGE_ACCESS_TOKEN_URL }} \
+            --zip bookstash-extension.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            bookstash-extension.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookstash-extension
+          path: bookstash-extension.zip
+          retention-days: 30

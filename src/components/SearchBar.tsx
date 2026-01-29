@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, forwardRef, useImperativeHandle, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
@@ -10,9 +10,23 @@ interface SearchBarProps {
   placeholder?: string
 }
 
-export function SearchBar({ className, placeholder = 'Search bookmarks...' }: SearchBarProps) {
+export interface SearchBarHandle {
+  focus: () => void
+  clear: () => void
+}
+
+export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(function SearchBar(
+  { className, placeholder = 'Search bookmarks...' },
+  ref
+) {
   const [query, setQuery] = useState('')
   const { search, clearFilter, isSearching } = useBookmarkStore()
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+    clear: () => handleClear(),
+  }))
 
   const handleSearch = useCallback(
     (value: string) => {
@@ -35,6 +49,7 @@ export function SearchBar({ className, placeholder = 'Search bookmarks...' }: Se
     <div className={cn('relative', className)}>
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       <Input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
@@ -58,4 +73,4 @@ export function SearchBar({ className, placeholder = 'Search bookmarks...' }: Se
       )}
     </div>
   )
-}
+})

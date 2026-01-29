@@ -68,3 +68,109 @@ body {
   background-color: var(--color-background);
   color: var(--color-foreground);
 }
+
+/* Toast animations */
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-in {
+  animation: slideInFromBottom 0.2s ease-out;
+}
+
+.animate-out {
+  animation: slideOutToRight 0.2s ease-in;
+}
+
+/* Drag and drop styles */
+.dragging {
+  opacity: 0.5;
+}
+
+.drop-target {
+  background-color: var(--color-accent);
+  border: 2px dashed var(--color-primary);
+}
+
+.drop-target-above::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background-color: var(--color-primary);
+}
+
+.drop-target-below::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: var(--color-primary);
+}
+
+/* Custom scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(240 5% 65%) hsl(240 5% 95%);
+}
+
+.dark * {
+  scrollbar-color: hsl(240 5% 35%) hsl(240 10% 10%);
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: hsl(240 5% 95%);
+  border-radius: 4px;
+}
+
+.dark *::-webkit-scrollbar-track {
+  background: hsl(240 10% 10%);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: hsl(240 5% 65%);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: hsl(240 5% 35%);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(240 5% 50%);
+  background-clip: padding-box;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: hsl(240 5% 45%);
+}

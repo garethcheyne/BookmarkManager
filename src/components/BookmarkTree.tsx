@@ -5,12 +5,13 @@ import { ScrollArea } from './ui/scroll-area'
 import { Loader2 } from 'lucide-react'
 
 export function BookmarkTree() {
-  const { bookmarkTree, isLoading, error, fetchBookmarks, fetchMetadata } = useBookmarkStore()
+  const { bookmarkTree, isLoading, error, fetchBookmarks, fetchMetadata, loadExpandedFolders } = useBookmarkStore()
 
   useEffect(() => {
     fetchBookmarks()
     fetchMetadata()
-  }, [fetchBookmarks, fetchMetadata])
+    loadExpandedFolders()
+  }, [fetchBookmarks, fetchMetadata, loadExpandedFolders])
 
   // Listen for bookmark changes from background
   useEffect(() => {

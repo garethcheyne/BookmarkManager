@@ -1,5 +1,5 @@
 {
-  "name": "bookmark-manager-pro",
+  "name": "bookstash",
   "version": "1.0.0",
   "description": "Modern bookmark management with GitHub Gist/Repo sharing capabilities",
   "type": "module",
@@ -8,6 +8,7 @@
     "prebuild": "node scripts/bump-version.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "release": "npm run build && node scripts/prepare-release.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest",
@@ -16,10 +17,10 @@
   },
   "keywords": [
     "chrome-extension",
-    "bookmark-manager",
+    "bookstash",
     "github-gist"
   ],
-  "author": "",
+  "author": "Gareth Cheyne & Claude (www.err403.com)",
   "license": "MIT",
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -32,6 +33,7 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

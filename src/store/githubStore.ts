@@ -13,6 +13,22 @@ import { storageLocal, storageSync } from '@/lib/chrome-api'
 const SUBSCRIPTIONS_KEY = 'github_subscriptions'
 const SHARED_GISTS_KEY = 'shared_gists'
 const FOLDER_SHARES_KEY = 'folder_shares'
+const REPO_COLORS_KEY = 'repo_colors'
+const TAG_LIBRARY_KEY = 'tag_library'
+
+// Predefined colors for repos
+export const REPO_COLORS = [
+  { name: 'Green', value: '#22c55e', bg: 'bg-green-500', bgLight: 'bg-green-100', bgDark: 'bg-green-900/50', text: 'text-green-700', textDark: 'text-green-400' },
+  { name: 'Blue', value: '#3b82f6', bg: 'bg-blue-500', bgLight: 'bg-blue-100', bgDark: 'bg-blue-900/50', text: 'text-blue-700', textDark: 'text-blue-400' },
+  { name: 'Purple', value: '#a855f7', bg: 'bg-purple-500', bgLight: 'bg-purple-100', bgDark: 'bg-purple-900/50', text: 'text-purple-700', textDark: 'text-purple-400' },
+  { name: 'Orange', value: '#f97316', bg: 'bg-orange-500', bgLight: 'bg-orange-100', bgDark: 'bg-orange-900/50', text: 'text-orange-700', textDark: 'text-orange-400' },
+  { name: 'Pink', value: '#ec4899', bg: 'bg-pink-500', bgLight: 'bg-pink-100', bgDark: 'bg-pink-900/50', text: 'text-pink-700', textDark: 'text-pink-400' },
+  { name: 'Teal', value: '#14b8a6', bg: 'bg-teal-500', bgLight: 'bg-teal-100', bgDark: 'bg-teal-900/50', text: 'text-teal-700', textDark: 'text-teal-400' },
+  { name: 'Red', value: '#ef4444', bg: 'bg-red-500', bgLight: 'bg-red-100', bgDark: 'bg-red-900/50', text: 'text-red-700', textDark: 'text-red-400' },
+  { name: 'Yellow', value: '#eab308', bg: 'bg-yellow-500', bgLight: 'bg-yellow-100', bgDark: 'bg-yellow-900/50', text: 'text-yellow-700', textDark: 'text-yellow-400' },
+] as const
+
+export type RepoColor = typeof REPO_COLORS[number]
 
 // Note: Auth is stored locally for security (token shouldn't sync across devices)
 // Folder shares and subscriptions use sync storage to sync across devices
@@ -51,6 +67,12 @@ interface GitHubState {
 
   // Folder shares - maps folderId to share info
   folderShares: Record<string, FolderShare>
+
+  // Repo colors - maps resourceId to color value
+  repoColors: Record<string, string>
+
+  // Tag library - list of tags that can be applied to bookmarks
+  tagLibrary: string[]
 }
 
 interface GitHubActions {
@@ -99,6 +121,19 @@ interface GitHubActions {
   unlinkFolder: (folderId: string) => Promise<void>
   getFolderShare: (folderId: string) => FolderShare | undefined
   updateFolderSyncTime: (folderId: string) => Promise<void>
+  updateFolderShareName: (folderId: string, newName: string) => Promise<void>
+  pullFromRepo: (folderId: string) => Promise<string | null>
+
+  // Repo colors
+  loadRepoColors: () => Promise<void>
+  setRepoColor: (resourceId: string, color: string) => Promise<void>
+  getRepoColor: (resourceId: string) => string | undefined
+
+  // Tag library
+  loadTagLibrary: () => Promise<void>
+  addTagToLibrary: (tag: string) => Promise<void>
+  removeTagFromLibrary: (tag: string) => Promise<void>
+  setTagLibrary: (tags: string[]) => Promise<void>
 }
 
 type GitHubStore = GitHubState & GitHubActions
@@ -117,11 +152,15 @@ export const useGitHubStore = create<GitHubStore>()(
     subscriptions: [],
     sharedGists: [],
     folderShares: {},
+    repoColors: {},
+    tagLibrary: [],
 
     // Initialize - check for existing auth
     initialize: async () => {
-      // Always load folder shares (even if not authenticated, to show indicators)
+      // Always load folder shares, repo colors, and tag library (even if not authenticated)
       get().loadFolderShares()
+      get().loadRepoColors()
+      get().loadTagLibrary()
 
       const auth = await getStoredAuth()
       if (auth) {
@@ -432,6 +471,131 @@ export const useGitHubStore = create<GitHubStore>()(
       }
       await storageSync.set({ [FOLDER_SHARES_KEY]: updated })
       set({ folderShares: updated })
+    },
+
+    // Update folder share name (when folder is renamed)
+    updateFolderShareName: async (folderId, newName) => {
+      const { folderShares } = get()
+      const share = folderShares[folderId]
+      if (!share) return
+
+      // Generate new file path based on new name
+      const sanitizedName = newName.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase()
+      const newFilePath = share.type === 'repo' ? `bookmarks/${sanitizedName}.json` : undefined
+
+      // If it's a repo and file path changed, we'll handle the rename on next sync
+      // The old file will remain (user can delete manually) and new file will be created
+      const updated = {
+        ...folderShares,
+        [folderId]: {
+          ...share,
+          name: newName,
+          filePath: newFilePath || share.filePath,
+        },
+      }
+      await storageSync.set({ [FOLDER_SHARES_KEY]: updated })
+      set({ folderShares: updated })
+    },
+
+    // Pull content from repo (for syncing changes from GitHub)
+    pullFromRepo: async (folderId) => {
+      const { folderShares, auth } = get()
+      const share = folderShares[folderId]
+      if (!share || !auth) return null
+
+      try {
+        if (share.type === 'repo') {
+          const [owner, repo] = share.resourceId.split('/')
+          const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/contents/${share.filePath || 'bookmarks.json'}`,
+            {
+              headers: {
+                Authorization: `Bearer ${auth.accessToken}`,
+                Accept: 'application/vnd.github.v3+json',
+              },
+            }
+          )
+          if (response.ok) {
+            const data = await response.json()
+            // Content is base64 encoded
+            const content = atob(data.content)
+            return content
+          }
+        } else if (share.type === 'gist') {
+          const response = await fetch(
+            `https://api.github.com/gists/${share.resourceId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${auth.accessToken}`,
+                Accept: 'application/vnd.github.v3+json',
+              },
+            }
+          )
+          if (response.ok) {
+            const data = await response.json()
+            const files = Object.values(data.files) as Array<{ content: string }>
+            if (files.length > 0) {
+              return files[0].content
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to pull from repo:', error)
+      }
+      return null
+    },
+
+    // Load repo colors (from sync storage for cross-device sync)
+    loadRepoColors: async () => {
+      const result = await storageSync.get<{
+        [REPO_COLORS_KEY]: Record<string, string>
+      }>([REPO_COLORS_KEY])
+      set({ repoColors: result[REPO_COLORS_KEY] || {} })
+    },
+
+    // Set repo color
+    setRepoColor: async (resourceId, color) => {
+      const { repoColors } = get()
+      const updated = { ...repoColors, [resourceId]: color }
+      await storageSync.set({ [REPO_COLORS_KEY]: updated })
+      set({ repoColors: updated })
+    },
+
+    // Get repo color
+    getRepoColor: (resourceId) => {
+      return get().repoColors[resourceId]
+    },
+
+    // Load tag library (from sync storage for cross-device sync)
+    loadTagLibrary: async () => {
+      const result = await storageSync.get<{ [TAG_LIBRARY_KEY]: string[] }>([TAG_LIBRARY_KEY])
+      set({ tagLibrary: result[TAG_LIBRARY_KEY] || [] })
+    },
+
+    // Add tag to library
+    addTagToLibrary: async (tag) => {
+      const { tagLibrary } = get()
+      const normalizedTag = tag.trim().toLowerCase()
+      if (normalizedTag && !tagLibrary.includes(normalizedTag)) {
+        const updated = [...tagLibrary, normalizedTag].sort()
+        await storageSync.set({ [TAG_LIBRARY_KEY]: updated })
+        set({ tagLibrary: updated })
+      }
+    },
+
+    // Remove tag from library
+    removeTagFromLibrary: async (tag) => {
+      const { tagLibrary } = get()
+      const updated = tagLibrary.filter((t) => t !== tag)
+      await storageSync.set({ [TAG_LIBRARY_KEY]: updated })
+      set({ tagLibrary: updated })
+    },
+
+    // Set entire tag library
+    setTagLibrary: async (tags) => {
+      const normalized = [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].sort()
+      await storageSync.set({ [TAG_LIBRARY_KEY]: normalized })
+      set({ tagLibrary: normalized })
     },
   }))
 )

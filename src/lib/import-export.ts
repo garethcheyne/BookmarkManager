@@ -14,7 +14,7 @@ export async function exportToJson(
     version: '1.0',
     metadata: {
       name: 'Exported Bookmarks',
-      description: 'Bookmarks exported from Bookmark Manager Pro',
+      description: 'Bookmarks exported from BookStash',
       author: '',
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
