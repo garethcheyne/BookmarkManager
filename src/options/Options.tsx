@@ -166,6 +166,20 @@ export function Options() {
                     {settings.showFavicons ? 'On' : 'Off'}
                   </Button>
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium">Hide Root Folders</label>
+                    <p className="text-xs text-muted-foreground">Show only folder contents (flattened view)</p>
+                  </div>
+                  <Button
+                    variant={settings.hideRootFolders ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => updateSettings({ hideRootFolders: !settings.hideRootFolders })}
+                  >
+                    {settings.hideRootFolders ? 'On' : 'Off'}
+                  </Button>
+                </div>
               </div>
             </section>
 

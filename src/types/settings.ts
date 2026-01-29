@@ -6,6 +6,7 @@ export interface Settings {
   theme: 'light' | 'dark' | 'system'
   compactMode: boolean
   showFavicons: boolean
+  hideRootFolders: boolean
 
   // Behavior
   defaultView: 'tree' | 'list'
@@ -48,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   compactMode: false,
   showFavicons: true,
+  hideRootFolders: false,
 
   defaultView: 'tree',
   defaultSortBy: 'title',

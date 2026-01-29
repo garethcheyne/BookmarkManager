@@ -9,8 +9,15 @@ import {
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
 import { TagInput } from './TagInput'
-import { useBookmarkStore } from '@/store'
+import { useBookmarkStore, useSettingsStore } from '@/store'
 
 interface AddBookmarkDialogProps {
   open: boolean
@@ -18,12 +25,17 @@ interface AddBookmarkDialogProps {
   parentId?: string
 }
 
-export function AddBookmarkDialog({ open, onOpenChange, parentId = '1' }: AddBookmarkDialogProps) {
-  const { createBookmark, updateMetadata, metadata } = useBookmarkStore()
+export function AddBookmarkDialog({ open, onOpenChange, parentId }: AddBookmarkDialogProps) {
+  const { createBookmark, updateMetadata, metadata, flatBookmarks } = useBookmarkStore()
+  const { settings } = useSettingsStore()
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [selectedParentId, setSelectedParentId] = useState(parentId || '1')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Get all folders for the dropdown
+  const folders = flatBookmarks.filter((b) => !b.url && !['0'].includes(b.id))
 
   // Get all existing tags for suggestions
   const allTags = Array.from(
@@ -35,7 +47,7 @@ export function AddBookmarkDialog({ open, onOpenChange, parentId = '1' }: AddBoo
 
     setIsLoading(true)
     try {
-      const bookmark = await createBookmark(parentId, title, url)
+      const bookmark = await createBookmark(selectedParentId, title, url)
 
       // Add tags if any
       if (tags.length > 0) {
@@ -46,6 +58,7 @@ export function AddBookmarkDialog({ open, onOpenChange, parentId = '1' }: AddBoo
       setTitle('')
       setUrl('')
       setTags([])
+      setSelectedParentId(parentId || '1')
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to create bookmark:', error)
@@ -58,6 +71,7 @@ export function AddBookmarkDialog({ open, onOpenChange, parentId = '1' }: AddBoo
     setTitle('')
     setUrl('')
     setTags([])
+    setSelectedParentId(parentId || '1')
     onOpenChange(false)
   }
 
@@ -89,6 +103,28 @@ export function AddBookmarkDialog({ open, onOpenChange, parentId = '1' }: AddBoo
               placeholder="https://..."
             />
           </div>
+
+          {settings.hideRootFolders && folders.length > 0 && (
+            <div className="grid gap-2">
+              <Label htmlFor="folder">Folder</Label>
+              <Select value={selectedParentId} onValueChange={setSelectedParentId}>
+                <SelectTrigger id="folder">
+                  <SelectValue placeholder="Select folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {folders.map((folder) => {
+                    const depth = (folder.parentId === '0' ? 0 : folder.title?.split('/').length || 0)
+                    const indent = '  '.repeat(depth)
+                    return (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        {indent}{folder.title}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label>Tags (optional)</Label>

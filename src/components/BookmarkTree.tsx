@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
-import { useBookmarkStore } from '@/store'
+import { useBookmarkStore, useSettingsStore } from '@/store'
 import { BookmarkItem } from './BookmarkItem'
 import { ScrollArea } from './ui/scroll-area'
 import { Loader2 } from 'lucide-react'
 
 export function BookmarkTree() {
   const { bookmarkTree, isLoading, error, fetchBookmarks, fetchMetadata, loadExpandedFolders } = useBookmarkStore()
+  const { settings } = useSettingsStore()
 
   useEffect(() => {
     fetchBookmarks()
@@ -50,10 +51,20 @@ export function BookmarkTree() {
   // The root of the bookmark tree is a single node with children
   const rootChildren = bookmarkTree[0]?.children || []
 
+  // Chrome's root folder IDs: 1 = Bookmarks Bar, 2 = Other Bookmarks, 3 = Mobile Bookmarks
+  const ROOT_FOLDER_IDS = ['1', '2', '3']
+
+  // If hideRootFolders is enabled, flatten the structure to show all children directly
+  const displayNodes = settings.hideRootFolders
+    ? rootChildren
+        .filter((folder) => ROOT_FOLDER_IDS.includes(folder.id))
+        .flatMap((folder) => folder.children || [])
+    : rootChildren
+
   return (
     <ScrollArea className="h-full">
       <div className="p-2">
-        {rootChildren.map((node) => (
+        {displayNodes.map((node) => (
           <BookmarkItem key={node.id} bookmark={node} />
         ))}
       </div>

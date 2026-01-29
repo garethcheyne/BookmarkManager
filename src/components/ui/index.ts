@@ -63,3 +63,13 @@ export {
   AlertDialogAction,
   AlertDialogCancel,
 } from './alert-dialog'
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+} from './select'

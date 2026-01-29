@@ -373,16 +373,33 @@ export function findDuplicates(bookmarks: Bookmark[]): Map<string, Bookmark[]> {
 }
 
 /**
- * Normalize URL for comparison
+ * Normalize URL for comparison - only exact URL matches
  */
 function normalizeUrl(url: string): string {
   try {
     const parsed = new URL(url)
-    // Remove trailing slashes, sort query params, lowercase
-    let normalized = `${parsed.protocol}//${parsed.host}${parsed.pathname}`.toLowerCase()
-    normalized = normalized.replace(/\/+$/, '')
+    // Keep the full URL including query params and hash
+    // Only normalize: protocol, hostname to lowercase, remove trailing slash from pathname
+    let normalized = `${parsed.protocol}//${parsed.hostname.toLowerCase()}`
+    
+    // Add port if not default
+    if (parsed.port && 
+        !((parsed.protocol === 'http:' && parsed.port === '80') || 
+          (parsed.protocol === 'https:' && parsed.port === '443'))) {
+      normalized += `:${parsed.port}`
+    }
+    
+    // Add pathname (remove only trailing slash if it's just "/")
+    const pathname = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '')
+    normalized += pathname
+    
+    // Keep search params and hash for exact matching
+    if (parsed.search) normalized += parsed.search
+    if (parsed.hash) normalized += parsed.hash
+    
     return normalized
   } catch {
+    // If URL parsing fails, just lowercase it
     return url.toLowerCase()
   }
 }

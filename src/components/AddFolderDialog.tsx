@@ -9,7 +9,14 @@ import {
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
-import { useBookmarkStore } from '@/store'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select'
+import { useBookmarkStore, useSettingsStore } from '@/store'
 
 interface AddFolderDialogProps {
   open: boolean
@@ -17,18 +24,24 @@ interface AddFolderDialogProps {
   parentId?: string
 }
 
-export function AddFolderDialog({ open, onOpenChange, parentId = '1' }: AddFolderDialogProps) {
-  const { createFolder } = useBookmarkStore()
+export function AddFolderDialog({ open, onOpenChange, parentId }: AddFolderDialogProps) {
+  const { createFolder, flatBookmarks } = useBookmarkStore()
+  const { settings } = useSettingsStore()
   const [name, setName] = useState('')
+  const [selectedParentId, setSelectedParentId] = useState(parentId || '1')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Get all folders for the dropdown
+  const folders = flatBookmarks.filter((b) => !b.url && !['0'].includes(b.id))
 
   const handleSave = async () => {
     if (!name.trim()) return
 
     setIsLoading(true)
     try {
-      await createFolder(parentId, name)
+      await createFolder(selectedParentId, name)
       setName('')
+      setSelectedParentId(parentId || '1')
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to create folder:', error)
@@ -39,6 +52,7 @@ export function AddFolderDialog({ open, onOpenChange, parentId = '1' }: AddFolde
 
   const handleClose = () => {
     setName('')
+    setSelectedParentId(parentId || '1')
     onOpenChange(false)
   }
 
@@ -60,6 +74,28 @@ export function AddFolderDialog({ open, onOpenChange, parentId = '1' }: AddFolde
               onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             />
           </div>
+
+          {settings.hideRootFolders && folders.length > 0 && (
+            <div className="grid gap-2">
+              <Label htmlFor="folder">Parent Folder</Label>
+              <Select value={selectedParentId} onValueChange={setSelectedParentId}>
+                <SelectTrigger id="folder">
+                  <SelectValue placeholder="Select folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {folders.map((folder) => {
+                    const depth = (folder.parentId === '0' ? 0 : folder.title?.split('/').length || 0)
+                    const indent = '  '.repeat(depth)
+                    return (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        {indent}{folder.title}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
