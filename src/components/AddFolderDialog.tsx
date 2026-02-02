@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from './ui/dialog'
 import { Button } from './ui/button'
@@ -61,6 +62,9 @@ export function AddFolderDialog({ open, onOpenChange, parentId }: AddFolderDialo
       <DialogContent className="sm:max-w-[350px]">
         <DialogHeader>
           <DialogTitle>New Folder</DialogTitle>
+          <DialogDescription>
+            Create a new folder to organize your bookmarks.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">

@@ -94,7 +94,7 @@ export function Popup() {
       {/* Header */}
       <header className="flex items-center justify-between pr-2 py-1.5 pl-4 border-b">
         <div className="flex items-center gap-2">
-          <div className="bg-gray-600 p-1 rounded-full border-2 border-orange-500">
+          <div className="bg-white p-1 rounded-full border-2">
             <img src="/icons/icon32.png" alt="BookStash" className="w-4 h-4" />
           </div>
           <h1 className="text-base font-semibold">BookStash</h1>

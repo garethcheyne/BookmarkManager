@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from './ui/dialog'
 import { Button } from './ui/button'
@@ -80,6 +81,9 @@ export function AddBookmarkDialog({ open, onOpenChange, parentId }: AddBookmarkD
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add Bookmark</DialogTitle>
+          <DialogDescription>
+            Create a new bookmark with optional tags and folder placement.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">

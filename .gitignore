@@ -29,3 +29,9 @@ coverage/
 # Chrome extension
 *.crx
 *.pem
+
+# Old artifacts
+*.bak
+*.old
+*.tmp
+*~

@@ -20,14 +20,16 @@ BookStash is a powerful bookmark management extension that brings professional-g
 
 **What makes BookStash special:**
 - 🎨 Beautiful, theme-aware UI (popup and side panel)
-- 🔄 Sync bookmark folders to GitHub Repositories or Gists
+- 🔄 Sync bookmark folders to GitHub Repositories or Gists with automatic cleanup
 - 🏷️ Add custom tags and notes to any bookmark
 - 🔍 Instant search with fuzzy matching
 - 📤 Import/Export bookmarks in JSON format
 - 🔁 Find and remove duplicate bookmarks
+- 🎯 Multi-select with Shift+click for batch operations
 - 🌙 Dark/Light mode support
-- ⚡ Lightning-fast performance with React 18
+- ⚡ Lightning-fast performance with React 19
 - 🔒 Privacy-first: GitHub tokens stored locally only
+- 🧹 Automatic GitHub cleanup when folders are renamed/deleted
 
 ## Screenshots
 
@@ -95,8 +97,10 @@ Backup folders to GitHub and access them from any device or share with your team
 **Sync to Repositories:**
 - Push entire bookmark folders to GitHub repos
 - Automatic JSON formatting
+- **Auto-generated README:** Each synced repo gets a comprehensive README explaining the structure
 - Keeps folder structure organized
 - Perfect for team sharing or public bookmark collections
+- **Automatic cleanup:** Orphaned files removed when folders are renamed or deleted
 
 **Sync to Gists:**
 - Quick backup to private or public Gists
@@ -108,12 +112,28 @@ Backup folders to GitHub and access them from any device or share with your team
 - Restore backups instantly
 - Merge bookmarks from multiple sources
 
+**Force Sync:**
+- Sync all connected folders at once from Settings
+- Perfect for ensuring all backups are up to date
+- Shows progress and results for each folder
+
+### 🎯 Smart Organization
+
+- **Multi-Select:** Hold Shift to select ranges, Ctrl/Cmd for individual items
+- **Drag & Drop:** Move multiple bookmarks at once
+- **Context Menus:** Right-click for quick actions
+- **Visual Indicators:** GitHub badges on synced folders
+- **Duplicate Detection:** Find and remove duplicate URLs
+- **Automatic Cleanup:** Renamed or deleted folders automatically cleaned up in GitHub
+
 ### 📊 Smart Features
 - **Duplicate Detection:** Find and remove duplicate URLs
 - **Import/Export:** Backup to JSON files
 - **Folder Badges:** Visual indicators for synced folders
 - **Trash Protection:** Confirm before deleting
 - **Theme Sync:** Follows system dark/light mode
+- **Multi-Select:** Select multiple bookmarks with Shift+click or Ctrl+click
+- **Batch Operations:** Move, delete, or tag multiple items at once
 
 ## Usage Guide
 
@@ -151,8 +171,11 @@ Backup folders to GitHub and access them from any device or share with your team
 **3. Sync a Folder:**
 - Right-click any bookmark folder
 - Choose "Share to GitHub"
-- Select "Save to Repository" or "Share as Gist"
-- Choose existing or create new
+- Select "Save to Repository"
+- Choose from:
+  - **Your Repos:** Select from repositories you own
+  - **Connect Existing:** Connect to any repo you have access to (yours or someone else's)
+  - **New Repo:** Create a new repository
 - Folder will show a GitHub badge when synced
 
 **4. Push Updates:**
@@ -165,11 +188,26 @@ Backup folders to GitHub and access them from any device or share with your team
 - Select "Pull from Repo/Gist"
 - Remote changes are merged locally
 
+**6. Force Sync All Folders:**
+- Open Settings (gear icon)
+- Go to GitHub Sync tab
+- Click "Sync Now" under Force Sync section
+- All connected folders sync immediately
+- View results showing successes and failures
+
+**Automatic Cleanup:**
+- When you rename a synced folder, the old file is automatically deleted from GitHub
+- When you delete a synced folder, its GitHub file is removed
+- **Orphan detection:** Scans repository for any old bookmark files not linked to current folders and removes them
+- No manual cleanup needed - BookStash keeps your repositories organized and artifact-free
+
 ### Keyboard Shortcuts
 
 - `Ctrl/Cmd + K` - Focus search
 - `Ctrl/Cmd + B` - New bookmark
 - `Ctrl/Cmd + N` - New folder
+- `Ctrl/Cmd + Click` - Toggle selection (multi-select)
+- `Shift + Click` - Select range
 - `Delete` - Delete selected items
 - `Esc` - Clear search/selection
 
@@ -267,6 +305,116 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for full setup instructions including:
 - Setting up GitHub secrets
 - Triggering releases
 - Troubleshooting
+
+## Bookmark Data Structure
+
+When you sync folders to GitHub, BookStash creates a `bookmarks.json` file with the following structure:
+
+```json
+{
+  "version": "1.0",
+  "metadata": {
+    "name": "My Bookmarks",
+    "description": "Personal bookmark collection",
+    "author": "username",
+    "created": "2026-02-02T12:00:00.000Z",
+    "updated": "2026-02-02T15:30:00.000Z",
+    "tags": ["work", "dev", "research"],
+    "isPublic": false,
+    "source": "repo"
+  },
+  "bookmarks": [
+    {
+      "title": "Google",
+      "url": "https://www.google.com",
+      "dateAdded": "2026-01-15T10:00:00.000Z",
+      "tags": ["search", "tools"],
+      "notes": "Primary search engine"
+    }
+  ],
+  "folders": [
+    {
+      "name": "Development",
+      "path": "Development",
+      "bookmarks": [
+        {
+          "title": "GitHub",
+          "url": "https://github.com",
+          "dateAdded": "2026-01-20T14:30:00.000Z",
+          "tags": ["dev", "git"],
+          "notes": "Code repository hosting"
+        }
+      ]
+    },
+    {
+      "name": "React",
+      "path": "Development/React",
+      "bookmarks": [
+        {
+          "title": "React Docs",
+          "url": "https://react.dev",
+          "tags": ["react", "docs"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Structure Details
+
+**Root Object:**
+- `version` - Format version (currently "1.0")
+- `metadata` - Collection information
+- `bookmarks` - Root-level bookmarks (not in folders)
+- `folders` - Organized bookmark collections
+
+**Metadata:**
+- `name` - Collection name (usually the folder name)
+- `description` - Optional description
+- `author` - GitHub username (if available)
+- `created` - ISO timestamp of first sync
+- `updated` - ISO timestamp of last sync
+- `tags` - Aggregate tags from all bookmarks
+- `isPublic` - Whether the repo/gist is public
+- `source` - "repo" or "gist"
+
+**Bookmarks:**
+- `title` - Bookmark display name
+- `url` - Full URL
+- `dateAdded` - ISO timestamp (optional)
+- `tags` - Array of custom tags (optional)
+- `notes` - User notes (optional)
+
+**Folders:**
+- `name` - Folder name
+- `path` - Full hierarchical path (e.g., "Work/Projects/2024")
+- `bookmarks` - Array of bookmarks in this folder
+
+### Dynamic Structure
+
+BookStash creates a **dynamic nested structure** in GitHub:
+- Root bookmarks appear in the `bookmarks` array
+- Nested folders use path notation: `"Parent/Child/Grandchild"`
+- Each folder maintains its own bookmark array
+- Folder structure is preserved when importing/syncing
+
+**Example Repository Structure:**
+```
+BookmarkManager-Personal/
+├── README.md (auto-generated)
+├── bookmarks.json (your synced bookmarks)
+└── .bookstash (metadata)
+```
+
+**Custom File Paths:**
+You can organize multiple bookmark collections in one repository:
+```
+my-bookmarks-repo/
+├── work/bookmarks.json
+├── personal/bookmarks.json
+└── research/bookmarks.json
+```
 
 ## Permissions
 

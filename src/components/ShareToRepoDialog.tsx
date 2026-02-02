@@ -42,7 +42,7 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
     return Array.from(repoMap.values())
   }, [folderShares])
 
-  const [mode, setMode] = useState<'select' | 'create'>('select')
+  const [mode, setMode] = useState<'select' | 'create' | 'connect'>('select')
   const [selectedRepo, setSelectedRepo] = useState('')
   const [commitMessage, setCommitMessage] = useState('Update bookmarks')
   const [isLoading, setIsLoading] = useState(false)
@@ -53,6 +53,9 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
   const [newRepoName, setNewRepoName] = useState('')
   const [newRepoDescription, setNewRepoDescription] = useState('')
   const [newRepoPrivate, setNewRepoPrivate] = useState(false)
+
+  // Connect to existing repo form
+  const [connectRepoUrl, setConnectRepoUrl] = useState('')
 
   useEffect(() => {
     if (open && isAuthenticated && userRepos.length === 0) {
@@ -68,6 +71,11 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
 
     if (mode === 'create' && !newRepoName.trim()) {
       setError('Please enter a repository name')
+      return
+    }
+
+    if (mode === 'connect' && !connectRepoUrl.trim()) {
+      setError('Please enter a repository URL or owner/repo')
       return
     }
 
@@ -105,6 +113,34 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
         // Create new repo first
         const repo = await createRepo(newRepoName.trim(), newRepoDescription, newRepoPrivate)
         targetRepo = { owner: repo.owner.login, name: repo.name, htmlUrl: repo.htmlUrl }
+      } else if (mode === 'connect') {
+        // Parse the repo URL or owner/repo string
+        let owner: string, repoName: string
+        const input = connectRepoUrl.trim()
+        
+        if (input.includes('/')) {
+          // Could be URL or owner/repo
+          if (input.includes('github.com')) {
+            // Parse GitHub URL
+            const match = input.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/)
+            if (!match) throw new Error('Invalid GitHub repository URL')
+            owner = match[1]
+            repoName = match[2].replace('.git', '')
+          } else {
+            // Assume owner/repo format
+            const parts = input.split('/')
+            owner = parts[0]
+            repoName = parts[1]
+          }
+        } else {
+          throw new Error('Please enter owner/repo or full GitHub URL')
+        }
+
+        targetRepo = {
+          owner,
+          name: repoName,
+          htmlUrl: `https://github.com/${owner}/${repoName}`
+        }
       } else {
         // Use selected repo
         const repo = userRepos.find((r) => `${r.owner.login}/${r.name}` === selectedRepo)
@@ -122,7 +158,7 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
         : 'bookmarks.json'
 
       // Save to repo
-      await saveToRepo(targetRepo.owner, targetRepo.name, content, commitMessage, filePath)
+      await saveToRepo(targetRepo.owner, targetRepo.name, content, commitMessage, filePath, folderName)
 
       // Link folder to repo if sharing a specific folder
       if (folderId) {
@@ -147,6 +183,7 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
     setNewRepoName('')
     setNewRepoDescription('')
     setNewRepoPrivate(false)
+    setConnectRepoUrl('')
     onOpenChange(false)
   }
 
@@ -159,6 +196,9 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
               <FolderGit2 className="h-5 w-5" />
               Share to GitHub Repository
             </DialogTitle>
+            <DialogDescription>
+              Connect your GitHub account to save bookmarks to a repository.
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4 text-center">
             <p className="text-muted-foreground mb-4">
@@ -218,7 +258,15 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
                 className="flex-1"
               >
                 <Github className="mr-2 h-4 w-4" />
-                Existing Repo
+                Your Repos
+              </Button>
+              <Button
+                variant={mode === 'connect' ? 'default' : 'outline'}
+                onClick={() => setMode('connect')}
+                className="flex-1"
+              >
+                <Link2 className="mr-2 h-4 w-4" />
+                Connect Existing
               </Button>
               <Button
                 variant={mode === 'create' ? 'default' : 'outline'}
@@ -280,6 +328,21 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
                       ))}
                     </select>
                   )}
+                </div>
+              </div>
+            ) : mode === 'connect' ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="connectRepo">Repository URL or Owner/Repo</Label>
+                  <Input
+                    id="connectRepo"
+                    value={connectRepoUrl}
+                    onChange={(e) => setConnectRepoUrl(e.target.value)}
+                    placeholder="https://github.com/user/repo or user/repo"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Connect to any GitHub repository you have access to. Can be owned by another user or organization.
+                  </p>
                 </div>
               </div>
             ) : (

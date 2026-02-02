@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from './ui/dialog'
 import { Button } from './ui/button'
@@ -77,6 +78,9 @@ export function EditBookmarkDialog({ bookmark, open, onOpenChange }: EditBookmar
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{isFolder ? 'Edit Folder' : 'Edit Bookmark'}</DialogTitle>
+          <DialogDescription>
+            {isFolder ? 'Update folder name and properties.' : 'Update bookmark title, URL, tags, and notes.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">

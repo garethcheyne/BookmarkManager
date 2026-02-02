@@ -3,6 +3,8 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import type { Bookmark, BookmarkFilter, BookmarkMetadata, BookmarkOperation } from '@/types'
 import { bookmarksApi, metadataStorage, toBookmark, flattenBookmarkTree, isFolder, storageLocal } from '@/lib/chrome-api'
 import { toast } from '@/components/ui/use-toast'
+import { useGitHubStore } from './githubStore'
+import { exportToJson } from '@/lib/import-export'
 
 const EXPANDED_FOLDERS_KEY = 'expanded_folder_ids'
 
@@ -14,6 +16,7 @@ interface BookmarkState {
 
   // UI State
   selectedIds: Set<string>
+  lastSelectedId: string | null
   expandedFolderIds: Set<string>
   currentFolderId: string | null
 
@@ -56,6 +59,7 @@ interface BookmarkActions {
   // Selection
   selectBookmark: (id: string, multi?: boolean) => void
   deselectBookmark: (id: string) => void
+  selectRange: (fromId: string, toId: string) => void
   selectAll: () => void
   deselectAll: () => void
   toggleSelection: (id: string) => void
@@ -92,6 +96,7 @@ export const useBookmarkStore = create<BookmarkStore>()(
     flatBookmarks: [],
     metadata: {},
     selectedIds: new Set(),
+    lastSelectedId: null,
     expandedFolderIds: new Set(['1', '2']), // Bookmark bar and Other bookmarks
     currentFolderId: null,
     filter: {},
@@ -241,7 +246,7 @@ export const useBookmarkStore = create<BookmarkStore>()(
       set((state) => {
         const newSelected = multi ? new Set(state.selectedIds) : new Set<string>()
         newSelected.add(id)
-        return { selectedIds: newSelected }
+        return { selectedIds: newSelected, lastSelectedId: id }
       })
     },
 
@@ -250,6 +255,24 @@ export const useBookmarkStore = create<BookmarkStore>()(
         const newSelected = new Set(state.selectedIds)
         newSelected.delete(id)
         return { selectedIds: newSelected }
+      })
+    },
+
+    selectRange: (fromId, toId) => {
+      const { flatBookmarks } = get()
+      const fromIndex = flatBookmarks.findIndex((b) => b.id === fromId)
+      const toIndex = flatBookmarks.findIndex((b) => b.id === toId)
+      
+      if (fromIndex === -1 || toIndex === -1) return
+      
+      const start = Math.min(fromIndex, toIndex)
+      const end = Math.max(fromIndex, toIndex)
+      const idsToSelect = flatBookmarks.slice(start, end + 1).map((b) => b.id)
+      
+      set((state) => {
+        const newSelected = new Set(state.selectedIds)
+        idsToSelect.forEach((id) => newSelected.add(id))
+        return { selectedIds: newSelected, lastSelectedId: toId }
       })
     },
 
@@ -371,3 +394,131 @@ export const useBookmarkStore = create<BookmarkStore>()(
     },
   }))
 )
+
+// Listen for folder cleanup messages from background script
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+  chrome.runtime.onMessage.addListener(async (message) => {
+    if (message.type === 'folder-share-cleanup-needed') {
+      // Folder was deleted - clean up the file from the repo
+      const { share } = message.data
+      if (share.type === 'repo' && share.filePath) {
+        const [owner, repo] = share.resourceId.split('/')
+        try {
+          const store = useGitHubStore.getState()
+          await store.deleteFileFromRepo(
+            owner,
+            repo,
+            share.filePath,
+            `Remove ${share.name} (folder deleted)`
+          )
+          console.log('Cleaned up deleted folder from repo:', share.filePath)
+          
+          // Also cleanup any orphaned files in the repo
+          await store.cleanupOrphanedFiles(owner, repo)
+        } catch (error) {
+          console.error('Failed to clean up deleted folder from repo:', error)
+        }
+      }
+    } else if (message.type === 'folder-share-renamed') {
+      // Folder was renamed - delete old file and sync new one
+      const { oldFilePath, newFilePath, share } = message.data
+      if (share.type === 'repo' && oldFilePath && newFilePath && oldFilePath !== newFilePath) {
+        const [owner, repo] = share.resourceId.split('/')
+        try {
+          const store = useGitHubStore.getState()
+          
+          // Delete old file
+          await store.deleteFileFromRepo(
+            owner,
+            repo,
+            oldFilePath,
+            `Rename ${share.name} (cleanup old file)`
+          )
+          console.log('Cleaned up renamed folder old file:', oldFilePath)
+          
+          // Also cleanup any orphaned files in the repo
+          await store.cleanupOrphanedFiles(owner, repo)
+          
+          // Note: The new file will be created on next sync
+        } catch (error) {
+          console.error('Failed to clean up renamed folder from repo:', error)
+        }
+      }
+    } else if (message.type === 'folder-moved-sync-needed') {
+      // Folder was moved - trigger auto-sync if it's a repo
+      const { folderId, share } = message.data
+      if (share.type === 'repo') {
+        const [owner, repo] = share.resourceId.split('/')
+        try {
+          const store = useBookmarkStore.getState()
+          const folder = store.getBookmarkById(folderId)
+          if (!folder) return
+
+          // Get folder contents
+          const bookmarksToExport = folder.children || []
+          
+          // Export bookmarks to JSON
+          const content = await exportToJson(bookmarksToExport, {
+            format: 'json',
+            includeMetadata: true,
+            includeTags: true,
+            includeNotes: true,
+          })
+
+          // Sync to repo
+          const githubStore = useGitHubStore.getState()
+          await githubStore.saveToRepo(
+            owner,
+            repo,
+            content,
+            `Auto-sync: ${folder.title} moved`,
+            share.filePath,
+            folder.title
+          )
+          
+          console.log('Auto-synced moved folder to repo:', folder.title)
+        } catch (error) {
+          console.error('Failed to auto-sync moved folder:', error)
+        }
+      }
+    } else if (message.type === 'bookmark-created-sync-needed' || message.type === 'bookmark-removed-sync-needed') {
+      // Bookmark created or removed in synced folder - trigger auto-sync
+      const { folderId, share } = message.data
+      if (share.type === 'repo') {
+        const [owner, repo] = share.resourceId.split('/')
+        try {
+          const store = useBookmarkStore.getState()
+          const folder = store.getBookmarkById(folderId)
+          if (!folder) return
+
+          // Get folder contents
+          const bookmarksToExport = folder.children || []
+          
+          // Export bookmarks to JSON
+          const content = await exportToJson(bookmarksToExport, {
+            format: 'json',
+            includeMetadata: true,
+            includeTags: true,
+            includeNotes: true,
+          })
+
+          // Sync to repo
+          const githubStore = useGitHubStore.getState()
+          const action = message.type === 'bookmark-created-sync-needed' ? 'added' : 'removed'
+          await githubStore.saveToRepo(
+            owner,
+            repo,
+            content,
+            `Auto-sync: Bookmark ${action} in ${folder.title}`,
+            share.filePath,
+            folder.title
+          )
+          
+          console.log(`Auto-synced ${action} bookmark in folder:`, folder.title)
+        } catch (error) {
+          console.error('Failed to auto-sync bookmark change:', error)
+        }
+      }
+    }
+  })
+}

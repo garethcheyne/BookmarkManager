@@ -31,17 +31,87 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 // Listen for bookmark changes to keep UI in sync
-chrome.bookmarks.onCreated.addListener((id, bookmark) => {
+chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
   console.log('Bookmark created:', id, bookmark)
   notifyUI('bookmark-created', { id, bookmark })
+  
+  // Check if created inside a synced folder
+  if (bookmark.parentId) {
+    try {
+      const result = await chrome.storage.sync.get('folder_shares')
+      const folderShares: FolderShares = (result.folder_shares as FolderShares) || ({} as FolderShares)
+      
+      // Check if parent or any ancestor is synced
+      let currentId = bookmark.parentId
+      while (currentId) {
+        if (folderShares[currentId]) {
+          console.log('Bookmark created in synced folder, triggering auto-sync:', folderShares[currentId])
+          notifyUI('bookmark-created-sync-needed', {
+            folderId: currentId,
+            share: folderShares[currentId],
+            bookmarkId: id
+          })
+          break
+        }
+        // Check parent's parent
+        const parent = await chrome.bookmarks.get(currentId)
+        currentId = parent[0]?.parentId || ''
+        if (!currentId) break
+      }
+    } catch (error) {
+      console.error('Failed to check for synced folder on create:', error)
+    }
+  }
 })
 
-chrome.bookmarks.onRemoved.addListener((id, removeInfo) => {
+chrome.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
   console.log('Bookmark removed:', id, removeInfo)
   notifyUI('bookmark-removed', { id, removeInfo })
 
   // Clean up metadata when bookmark is deleted
   chrome.storage.local.remove(`bookmark_meta_${id}`)
+
+  // Check if removed from a synced folder
+  if (removeInfo.parentId) {
+    try {
+      const result = await chrome.storage.sync.get('folder_shares')
+      const folderShares: FolderShares = (result.folder_shares as FolderShares) || ({} as FolderShares)
+      
+      // Check if parent is synced
+      if (folderShares[removeInfo.parentId]) {
+        console.log('Bookmark removed from synced folder, triggering auto-sync:', folderShares[removeInfo.parentId])
+        notifyUI('bookmark-removed-sync-needed', {
+          folderId: removeInfo.parentId,
+          share: folderShares[removeInfo.parentId],
+          bookmarkId: id
+        })
+      }
+    } catch (error) {
+      console.error('Failed to check for synced folder on remove:', error)
+    }
+  }
+
+  // Check if this was a linked folder and notify for cleanup
+  try {
+    const result = await chrome.storage.sync.get('folder_shares')
+    const folderShares: FolderShares = (result.folder_shares as FolderShares) || ({} as FolderShares)
+    if (folderShares[id]) {
+      const share = folderShares[id]
+      console.log('Linked folder deleted, needs cleanup:', share)
+      
+      // Remove the folder share mapping
+      delete folderShares[id]
+      await chrome.storage.sync.set({ folder_shares: folderShares })
+      
+      // Notify UI to clean up the file from the repo
+      notifyUI('folder-share-cleanup-needed', { 
+        folderId: id, 
+        share 
+      })
+    }
+  } catch (error) {
+    console.error('Failed to check for folder share on delete:', error)
+  }
 })
 
 chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
@@ -56,6 +126,7 @@ chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
       if (folderShares[id]) {
         // Update the folder share name
         const share = folderShares[id]
+        const oldFilePath = share.filePath
         const sanitizedName = changeInfo.title.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase()
         const newFilePath = share.type === 'repo' ? `bookmarks/${sanitizedName}.json` : undefined
 
@@ -66,6 +137,16 @@ chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
         }
         await chrome.storage.sync.set({ folder_shares: folderShares })
         console.log('Updated folder share for renamed folder:', changeInfo.title)
+        
+        // Notify UI to clean up old file and create new one
+        if (share.type === 'repo' && oldFilePath !== newFilePath) {
+          notifyUI('folder-share-renamed', {
+            folderId: id,
+            oldFilePath,
+            newFilePath,
+            share: folderShares[id]
+          })
+        }
       }
     } catch (error) {
       console.error('Failed to update folder share on rename:', error)
@@ -73,9 +154,26 @@ chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
   }
 })
 
-chrome.bookmarks.onMoved.addListener((id, moveInfo) => {
+chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
   console.log('Bookmark moved:', id, moveInfo)
   notifyUI('bookmark-moved', { id, moveInfo })
+  
+  // Check if this is a linked folder and trigger sync
+  try {
+    const result = await chrome.storage.sync.get('folder_shares')
+    const folderShares: FolderShares = (result.folder_shares as FolderShares) || ({} as FolderShares)
+    if (folderShares[id]) {
+      // This is a synced folder that was moved - trigger auto-sync
+      console.log('Synced folder moved, triggering auto-sync:', folderShares[id])
+      notifyUI('folder-moved-sync-needed', {
+        folderId: id,
+        share: folderShares[id],
+        moveInfo
+      })
+    }
+  } catch (error) {
+    console.error('Failed to check for folder share on move:', error)
+  }
 })
 
 chrome.bookmarks.onChildrenReordered.addListener((id, reorderInfo) => {

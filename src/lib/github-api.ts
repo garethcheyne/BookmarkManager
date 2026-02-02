@@ -44,31 +44,54 @@ async function githubFetch<T>(
 ): Promise<T> {
   const url = endpoint.startsWith('http') ? endpoint : `${GITHUB_API_BASE}${endpoint}`
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new GitHubApiError(
+        error.message || `GitHub API error: ${response.status}`,
+        response.status,
+        error
+      )
+    }
+
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return {} as T
+    }
+
+    return response.json()
+  } catch (error) {
+    // If it's already a GitHubApiError, rethrow it
+    if (error instanceof GitHubApiError) {
+      throw error
+    }
+    
+    // Handle network errors
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new GitHubApiError(
+        'Network error: Unable to reach GitHub API. Check your internet connection.',
+        0,
+        error
+      )
+    }
+    
+    // Handle other fetch errors
     throw new GitHubApiError(
-      error.message || `GitHub API error: ${response.status}`,
-      response.status,
+      `Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      0,
       error
     )
   }
-
-  // Handle 204 No Content
-  if (response.status === 204) {
-    return {} as T
-  }
-
-  return response.json()
 }
 
 /**
@@ -415,4 +438,198 @@ export function parseCollectionJson(json: string): SharedCollection {
   }
 
   return data as SharedCollection
+}
+
+/**
+ * Generate README content for synced bookmark repository
+ */
+export function generateSyncReadme(folderName: string, fileName: string = 'bookmarks.json', bookmarkData?: string): string {
+  // Parse bookmark data to generate folder tree
+  let folderTree = ''
+  let totalBookmarks = 0
+  let totalFolders = 0
+  let allTags: string[] = []
+  
+  if (bookmarkData) {
+    try {
+      const data = JSON.parse(bookmarkData)
+      totalBookmarks = (data.bookmarks?.length || 0)
+      totalFolders = (data.folders?.length || 0)
+      allTags = data.metadata?.tags || []
+      
+      // Generate folder tree
+      if (data.folders && data.folders.length > 0) {
+        folderTree = '\n## 📂 Folder Structure\n\n```\n'
+        folderTree += `${folderName}/\n`
+        
+        // Build tree structure
+        const pathMap = new Map<string, number>()
+        data.folders.forEach((folder: any) => {
+          pathMap.set(folder.path, folder.bookmarks?.length || 0)
+        })
+        
+        // Sort paths for hierarchical display
+        const sortedPaths = Array.from(pathMap.keys()).sort()
+        const processedPaths = new Set<string>()
+        
+        sortedPaths.forEach((path, index) => {
+          const parts = path.split('/')
+          const bookmarkCount = pathMap.get(path) || 0
+          const isLast = index === sortedPaths.length - 1
+          
+          parts.forEach((part, partIndex) => {
+            const currentPath = parts.slice(0, partIndex + 1).join('/')
+            if (!processedPaths.has(currentPath)) {
+              processedPaths.add(currentPath)
+              const indent = '  '.repeat(partIndex)
+              const prefix = partIndex === parts.length - 1 ? (isLast ? '└── ' : '├── ') : '├── '
+              const suffix = partIndex === parts.length - 1 ? ` (${bookmarkCount} bookmarks)` : ''
+              folderTree += `${indent}${prefix}${part}/${suffix}\n`
+            }
+          })
+        })
+        
+        folderTree += '```\n'
+      }
+      
+      if (data.bookmarks && data.bookmarks.length > 0) {
+        totalBookmarks += data.bookmarks.length
+      }
+    } catch (error) {
+      console.error('Failed to parse bookmark data for README:', error)
+    }
+  }
+  
+  const stats = totalBookmarks > 0 ? `\n## 📊 Collection Stats\n\n- **Total Bookmarks:** ${totalBookmarks}\n- **Folders:** ${totalFolders}\n- **Tags:** ${allTags.length > 0 ? allTags.join(', ') : 'None'}\n- **Last Updated:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n` : ''
+
+  // Generate actual file structure
+  const fileStructure = fileName.includes('/') 
+    ? `\`\`\`
+${fileName.substring(0, fileName.lastIndexOf('/'))}
+├── README.md          # This file (auto-generated)
+└── ${fileName.substring(fileName.lastIndexOf('/') + 1)}      # Your bookmarks in JSON format
+\`\`\``
+    : `\`\`\`
+.
+├── README.md          # This file (auto-generated)
+└── ${fileName}      # Your bookmarks in JSON format
+\`\`\``
+
+  return `# ${folderName}
+
+> 🔖 Personal bookmark collection synced with BookStash
+
+This repository contains your **${folderName}** bookmark collection, automatically synchronized from your browser. All bookmarks are stored in a structured JSON format with tags, notes, and metadata preserved.
+${folderTree}${stats}
+## 🔄 How Sync Works
+
+### Automatic Synchronization
+- **Push:** When you add, edit, or delete bookmarks in your browser, changes are automatically pushed to this repository
+- **Structure Preservation:** Nested folders maintain their hierarchical structure using path notation
+- **Metadata Included:** Tags, notes, creation dates, and custom metadata are all preserved
+- **README Updates:** This file is automatically regenerated on each sync with current statistics
+
+### Sync Triggers
+1. Right-click folder → "Push to Repo" (manual sync)
+2. Drag bookmarks while holding Ctrl/Cmd (auto-sync on drop)
+3. Force Sync All button in settings (bulk sync)
+4. Automatic cleanup when folders are renamed or deleted
+
+### What Gets Synced
+- ✅ Bookmark titles and URLs
+- ✅ Folder organization and hierarchy
+- ✅ Custom tags you've added
+- ✅ Personal notes on bookmarks
+- ✅ Date added timestamps
+- ✅ Folder structure (nested paths)
+
+## 📄 File Structure
+
+${fileStructure}
+
+## 🔍 Data Format
+
+Your bookmarks are stored in \`${fileName}\` using this structure:
+
+\`\`\`json
+{
+  "version": "1.0",
+  "metadata": {
+    "name": "${folderName}",
+    "description": "...",
+    "author": "Your GitHub username",
+    "created": "2026-02-02T12:00:00.000Z",
+    "updated": "2026-02-02T15:30:00.000Z",
+    "tags": ["tag1", "tag2"],
+    "isPublic": false
+  },
+  "bookmarks": [
+    {
+      "title": "Example Site",
+      "url": "https://example.com",
+      "dateAdded": "2026-01-15T10:00:00.000Z",
+      "tags": ["work", "reference"],
+      "notes": "Optional notes"
+    }
+  ],
+  "folders": [
+    {
+      "name": "Subfolder",
+      "path": "Parent/Subfolder",
+      "bookmarks": [...]
+    }
+  ]
+}
+\`\`\`
+
+### Format Details
+- **Folders:** Use \`path\` property with \`/\` separators for nested structures (e.g., \`"Work/Projects/2024"\`)
+- **Bookmarks:** Each has title, URL, optional tags array, optional notes, and creation timestamp
+- **Metadata:** Collection-level info including aggregate tags and sync timestamps
+
+## 💡 Usage
+
+### Import to Browser
+1. Install [BookStash extension](https://github.com/garethcheyne/BookmarkManager)
+2. Right-click any folder in your bookmarks
+3. Select "Import from GitHub" → "Repository"
+4. Enter this repository URL
+5. Bookmarks are imported with full metadata
+
+### Share with Others
+- **Public Repos:** Anyone can import your bookmarks using the repo URL
+- **Private Repos:** Only you and collaborators can access
+- **Team Collections:** Perfect for sharing curated bookmark lists
+
+### Manual Editing
+You can edit \`${fileName}\` directly:
+- Add new bookmarks to the \`bookmarks\` or \`folders\` arrays
+- Modify titles, URLs, tags, or notes
+- Next sync will merge your changes (may prompt for conflict resolution)
+
+## 🔧 Maintenance
+
+### Automatic Cleanup
+BookStash automatically maintains repository cleanliness:
+- **Folder Deletion:** Removes corresponding JSON file
+- **Folder Rename:** Deletes old file, creates new one with updated name
+- **Orphan Detection:** Scans for and removes any leftover bookmark files not linked to active folders
+
+### Version Control
+All changes are tracked through Git commits:
+- Each sync creates a commit with descriptive message
+- Full history preserved for rollback if needed
+- Use GitHub's history view to see bookmark evolution
+
+## ⚙️ Powered By
+
+**BookStash** - Modern bookmark management for Chrome & Edge
+- GitHub: [garethcheyne/BookmarkManager](https://github.com/garethcheyne/BookmarkManager)
+- Features: GitHub sync, tags, search, duplicate detection, multi-select
+- Privacy: All tokens stored locally, direct GitHub API access
+
+---
+
+*📅 Last synced: ${new Date().toISOString().split('T')[0]} • 🔖 Synced with BookStash*
+`
 }

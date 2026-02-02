@@ -7,8 +7,9 @@ import {
   authenticateWithToken,
   validateAuth,
 } from '@/lib/github-auth'
-import { gistsApi, reposApi } from '@/lib/github-api'
+import { gistsApi, reposApi, generateSyncReadme } from '@/lib/github-api'
 import { storageLocal, storageSync } from '@/lib/chrome-api'
+import { toast } from '@/components/ui/use-toast'
 
 const SUBSCRIPTIONS_KEY = 'github_subscriptions'
 const SHARED_GISTS_KEY = 'shared_gists'
@@ -101,8 +102,16 @@ interface GitHubActions {
     repo: string,
     content: string,
     message: string,
-    filePath?: string // Optional: custom file path (default: bookmarks.json)
+    filePath?: string, // Optional: custom file path (default: bookmarks.json)
+    folderName?: string // Optional: folder name for README generation
   ) => Promise<void>
+  deleteFileFromRepo: (
+    owner: string,
+    repo: string,
+    filePath: string,
+    message: string
+  ) => Promise<void>
+  cleanupOrphanedFiles: (owner: string, repo: string) => Promise<void>
 
   // Subscriptions
   loadSubscriptions: () => Promise<void>
@@ -137,6 +146,21 @@ interface GitHubActions {
 }
 
 type GitHubStore = GitHubState & GitHubActions
+
+// Helper function to handle auth errors
+async function handleAuthError(error: unknown, store: GitHubStore) {
+  if (error && typeof error === 'object' && 'status' in error) {
+    const status = (error as any).status
+    if (status === 401 || status === 403) {
+      // Authentication error - notify user
+      toast.error('Authentication Error', 'Your GitHub token is invalid or expired. Please reconnect your account.')
+      // Clear invalid auth
+      await store.logout()
+      return true
+    }
+  }
+  return false
+}
 
 export const useGitHubStore = create<GitHubStore>()(
   subscribeWithSelector((set, get) => ({
@@ -173,7 +197,9 @@ export const useGitHubStore = create<GitHubStore>()(
           get().loadSubscriptions()
           get().loadSharedGists()
         } else {
+          // Auth is no longer valid - clear it and notify user
           await clearAuth()
+          toast.error('Session Expired', 'Your GitHub authentication has expired. Please reconnect your account.')
         }
       }
     },
@@ -234,6 +260,16 @@ export const useGitHubStore = create<GitHubStore>()(
       } catch (error) {
         console.error('Failed to fetch gists:', error)
         set({ isLoadingGists: false })
+        
+        // Check if it's an authentication error and handle it
+        const wasAuthError = await handleAuthError(error, get())
+        if (wasAuthError) return
+        
+        // For other errors, just log
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          console.warn('GitHub gists fetch failed, but continuing:', errorMessage)
+        }
       }
     },
 
@@ -302,6 +338,16 @@ export const useGitHubStore = create<GitHubStore>()(
       } catch (error) {
         console.error('Failed to fetch repos:', error)
         set({ isLoadingRepos: false })
+        
+        // Check if it's an authentication error and handle it
+        const wasAuthError = await handleAuthError(error, get())
+        if (wasAuthError) return
+        
+        // For other errors, just log
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          console.warn('GitHub repos fetch failed, but continuing:', errorMessage)
+        }
       }
     },
 
@@ -321,7 +367,7 @@ export const useGitHubStore = create<GitHubStore>()(
     },
 
     // Save bookmarks to a repo
-    saveToRepo: async (owner, repo, content, message, filePath) => {
+    saveToRepo: async (owner, repo, content, message, filePath, folderName) => {
       const { auth } = get()
       if (!auth) throw new Error('Not authenticated')
 
@@ -330,6 +376,7 @@ export const useGitHubStore = create<GitHubStore>()(
       // Check if file exists to get SHA
       const sha = await reposApi.getFileSha(auth.accessToken, owner, repo, path)
 
+      // Save bookmarks file
       await reposApi.putFile(
         auth.accessToken,
         owner,
@@ -339,6 +386,113 @@ export const useGitHubStore = create<GitHubStore>()(
         message,
         sha || undefined
       )
+
+      // Also create/update README.md in repository root
+      try {
+        const readmePath = 'README.md'
+        const readmeContent = generateSyncReadme(folderName || 'Bookmarks', path, content)
+        const readmeSha = await reposApi.getFileSha(auth.accessToken, owner, repo, readmePath)
+        
+        await reposApi.putFile(
+          auth.accessToken,
+          owner,
+          repo,
+          readmePath,
+          readmeContent,
+          `Update README for ${folderName || 'bookmarks'}`,
+          readmeSha || undefined
+        )
+      } catch (error) {
+        console.warn('Failed to update README:', error)
+        // Don't fail the whole operation if README update fails
+      }
+    },
+
+    // Delete a file from a repo
+    deleteFileFromRepo: async (owner, repo, filePath, message) => {
+      const { auth } = get()
+      if (!auth) throw new Error('Not authenticated')
+
+      // Get the file SHA first
+      const sha = await reposApi.getFileSha(auth.accessToken, owner, repo, filePath)
+      if (!sha) {
+        console.warn('File not found in repo:', filePath)
+        return // File doesn't exist, nothing to delete
+      }
+
+      // Delete the file using GitHub API
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${auth.accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          sha,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete file: ${response.statusText}`)
+      }
+    },
+
+    // Clean up orphaned bookmark files in a repository
+    cleanupOrphanedFiles: async (owner, repo) => {
+      const { auth, folderShares } = get()
+      if (!auth) throw new Error('Not authenticated')
+
+      try {
+        // Get all files in the repository root and bookmarks/ directory
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`, {
+          headers: {
+            Authorization: `Bearer ${auth.accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+          },
+        })
+
+        if (!response.ok) {
+          console.warn('Failed to fetch repo tree for cleanup')
+          return
+        }
+
+        const data = await response.json()
+        const files = data.tree.filter((item: any) => 
+          item.type === 'blob' && 
+          (item.path.endsWith('.json') && item.path !== 'package.json' && item.path !== 'package-lock.json')
+        )
+
+        // Get all current file paths from folder shares for this repo
+        const currentFilePaths = new Set<string>()
+        Object.values(folderShares).forEach((share) => {
+          if (share.type === 'repo' && share.resourceId === `${owner}/${repo}`) {
+            currentFilePaths.add(share.filePath || 'bookmarks.json')
+          }
+        })
+
+        // Find orphaned files
+        const orphanedFiles = files.filter((file: any) => !currentFilePaths.has(file.path))
+
+        // Delete orphaned files
+        for (const file of orphanedFiles) {
+          console.log('Deleting orphaned file:', file.path)
+          await get().deleteFileFromRepo(
+            owner, 
+            repo, 
+            file.path, 
+            `Cleanup: Remove orphaned bookmark file ${file.path}`
+          )
+        }
+
+        if (orphanedFiles.length > 0) {
+          console.log(`Cleaned up ${orphanedFiles.length} orphaned file(s) from ${owner}/${repo}`)
+        }
+      } catch (error) {
+        console.error('Failed to cleanup orphaned files:', error)
+        // Don't throw - this is a best-effort cleanup
+      }
     },
 
     // Load subscriptions (from sync storage for cross-device sync)

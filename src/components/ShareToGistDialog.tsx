@@ -129,8 +129,9 @@ export function ShareToGistDialog({ open, onOpenChange, folderId, folderName }: 
             <DialogTitle className="flex items-center gap-2">
               <Github className="h-5 w-5" />
               Share to GitHub Gist
-            </DialogTitle>
-          </DialogHeader>
+            </DialogTitle>            <DialogDescription>
+              Connect your GitHub account to share bookmarks via Gist.
+            </DialogDescription>          </DialogHeader>
           <div className="py-4 text-center">
             <p className="text-muted-foreground mb-4">
               Connect your GitHub account to share bookmarks.

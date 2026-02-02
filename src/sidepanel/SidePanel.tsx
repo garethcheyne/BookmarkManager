@@ -105,7 +105,7 @@ export function SidePanel() {
       {/* Compact single toolbar for side panel mode */}
       <div className="flex items-center gap-1 p-2 border-b bg-muted/50">
 
-        <div className="bg-gray-600 p-1 rounded-full border-2 border-orange-500">
+        <div className="bg-white p-1 rounded-full border-2">
           <img src="/icons/icon32.png" alt="BookStash" className="w-4 h-4" />
         </div>
         {/* Add buttons */}

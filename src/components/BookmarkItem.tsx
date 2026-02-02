@@ -37,15 +37,17 @@ export function BookmarkItem({
 }: BookmarkItemProps) {
   const {
     selectedIds,
+    lastSelectedId,
     expandedFolderIds,
     metadata,
     toggleSelection,
+    selectRange,
     toggleFolder,
     trackAccess,
     getChildrenOf,
     deleteBookmark,
     getBookmarkById,
-    moveBookmark,
+    moveBookmarks,
     fetchBookmarks,
   } = useBookmarkStore()
 
@@ -71,16 +73,28 @@ export function BookmarkItem({
   const isRootFolder = ['0', '1', '2', '3'].includes(bookmark.id)
 
   const handleClick = (e: React.MouseEvent) => {
-    if (isFolder) {
+    // Handle selection for both folders and bookmarks
+    if (e.shiftKey) {
+      // Always prevent default when Shift is held
+      e.preventDefault()
+      if (lastSelectedId) {
+        // Range selection with Shift
+        selectRange(lastSelectedId, bookmark.id)
+      } else {
+        // First selection with Shift - just select this item
+        toggleSelection(bookmark.id)
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      // Multi-select with Ctrl/Cmd
+      e.preventDefault()
+      toggleSelection(bookmark.id)
+    } else if (isFolder) {
+      // Folders toggle expand/collapse on regular click
       toggleFolder(bookmark.id)
     } else {
-      if (e.ctrlKey || e.metaKey) {
-        toggleSelection(bookmark.id)
-      } else {
-        // Open bookmark
-        trackAccess(bookmark.id)
-        window.open(bookmark.url, '_blank')
-      }
+      // Bookmarks open on regular click
+      trackAccess(bookmark.id)
+      window.open(bookmark.url, '_blank')
     }
   }
 
@@ -112,7 +126,7 @@ export function BookmarkItem({
       if (folderShare.type === 'repo') {
         // Parse owner/repo from resourceId
         const [owner, repo] = folderShare.resourceId.split('/')
-        await saveToRepo(owner, repo, content, `Sync ${bookmark.title}`, folderShare.filePath)
+        await saveToRepo(owner, repo, content, `Sync ${bookmark.title}`, folderShare.filePath, bookmark.title)
       } else if (folderShare.type === 'gist') {
         // Gist sync support
         await updateGist(folderShare.resourceId, content)
@@ -178,10 +192,29 @@ export function BookmarkItem({
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('bookmark/id', bookmark.id)
+    // If dragging a selected item, drag all selected items
+    const itemsToDrag = isSelected ? Array.from(selectedIds) : [bookmark.id]
+    
+    e.dataTransfer.setData('bookmark/ids', JSON.stringify(itemsToDrag))
     e.dataTransfer.setData('bookmark/parentId', bookmark.parentId || '')
     e.dataTransfer.effectAllowed = 'move'
     setIsDragging(true)
+    
+    // Visual feedback for multiple items
+    if (itemsToDrag.length > 1) {
+      const dragImage = document.createElement('div')
+      dragImage.textContent = `${itemsToDrag.length} items`
+      dragImage.style.position = 'absolute'
+      dragImage.style.top = '-1000px'
+      dragImage.style.padding = '4px 8px'
+      dragImage.style.background = 'rgba(0, 0, 0, 0.8)'
+      dragImage.style.color = 'white'
+      dragImage.style.borderRadius = '4px'
+      dragImage.style.fontSize = '12px'
+      document.body.appendChild(dragImage)
+      e.dataTransfer.setDragImage(dragImage, 0, 0)
+      setTimeout(() => document.body.removeChild(dragImage), 0)
+    }
   }
 
   const handleDragEnd = () => {
@@ -192,8 +225,8 @@ export function BookmarkItem({
     e.preventDefault()
     e.stopPropagation()
 
-    const draggedId = e.dataTransfer.types.includes('bookmark/id')
-    if (!draggedId) return
+    const draggedIds = e.dataTransfer.types.includes('bookmark/ids')
+    if (!draggedIds) return
 
     const rect = itemRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -218,25 +251,33 @@ export function BookmarkItem({
     e.preventDefault()
     e.stopPropagation()
 
-    const draggedId = e.dataTransfer.getData('bookmark/id')
-    if (!draggedId || draggedId === bookmark.id) {
+    const idsData = e.dataTransfer.getData('bookmark/ids')
+    if (!idsData) {
+      setDragOver(null)
+      return
+    }
+
+    const draggedIds: string[] = JSON.parse(idsData)
+    
+    // Don't drop onto self or if any dragged item is the target
+    if (draggedIds.includes(bookmark.id)) {
       setDragOver(null)
       return
     }
 
     try {
       if (dragOver === 'inside' && isFolder) {
-        // Move into this folder
-        await moveBookmark(draggedId, bookmark.id)
-        toast.success('Moved', 'Bookmark moved successfully')
+        // Move all items into this folder
+        await moveBookmarks(draggedIds, bookmark.id)
+        const count = draggedIds.length
+        toast.success('Moved', `${count} bookmark${count > 1 ? 's' : ''} moved successfully`)
       } else {
         // Move to same parent, reorder
+        // For now, just move to the target parent without precise reordering
         const targetParentId = bookmark.parentId || '1'
-        const siblings = getChildrenOf(targetParentId)
-        const targetIndex = siblings.findIndex(s => s.id === bookmark.id)
-        const newIndex = dragOver === 'above' ? targetIndex : targetIndex + 1
-        await moveBookmark(draggedId, targetParentId, newIndex)
-        toast.success('Moved', 'Bookmark reordered successfully')
+        await moveBookmarks(draggedIds, targetParentId)
+        const count = draggedIds.length
+        toast.success('Moved', `${count} bookmark${count > 1 ? 's' : ''} moved successfully`)
       }
     } catch (error) {
       toast.error('Move failed', (error as Error).message)
