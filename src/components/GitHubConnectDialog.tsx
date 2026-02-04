@@ -28,7 +28,7 @@ export function GitHubConnectDialog({ open, onOpenChange }: GitHubConnectDialogP
       await login(token.trim())
       setToken('')
       onOpenChange(false)
-    } catch (error) {
+    } catch {
       // Error is handled in the store
     }
   }

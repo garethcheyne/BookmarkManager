@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "BookStash",
-  "version": "26.2.2.37",
+  "version": "26.2.5.6",
   "description": "Modern bookmark management with GitHub Gist/Repo sharing capabilities",
   "permissions": [
     "bookmarks",
     "storage",
     "sidePanel",
-    "identity"
+    "identity",
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
     "https://api.github.com/*"
@@ -39,5 +41,5 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "version_name": "2026-02-02-37"
+  "version_name": "2026-02-05-06"
 }

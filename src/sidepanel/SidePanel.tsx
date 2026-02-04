@@ -13,10 +13,12 @@ import {
   FolderGit2,
   Link,
   User,
+  Code2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/toaster'
-import { SearchBar, BookmarkTree, SearchResults, type SearchBarHandle } from '@/components'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SearchBar, BookmarkTree, SearchResults, SnippetCatalogue, type SearchBarHandle } from '@/components'
 import { useKeyboardShortcuts } from '@/hooks'
 import { AddBookmarkDialog } from '@/components/AddBookmarkDialog'
 import { AddFolderDialog } from '@/components/AddFolderDialog'
@@ -47,6 +49,9 @@ export function SidePanel() {
 
   // Refs
   const searchBarRef = useRef<SearchBarHandle>(null)
+
+  // UI state
+  const [activeTab, setActiveTab] = useState<'bookmarks' | 'snippets'>('bookmarks')
 
   const [addBookmarkOpen, setAddBookmarkOpen] = useState(false)
   const [addFolderOpen, setAddFolderOpen] = useState(false)
@@ -227,13 +232,15 @@ export function SidePanel() {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="p-3 border-b">
-        <SearchBar />
-      </div>
+      {/* Search - only show for bookmarks tab */}
+      {activeTab === 'bookmarks' && (
+        <div className="p-3 border-b">
+          <SearchBar />
+        </div>
+      )}
 
       {/* Selection info */}
-      {selectedIds.size > 0 && (
+      {activeTab === 'bookmarks' && selectedIds.size > 0 && (
         <div className="px-3 py-1 bg-accent text-accent-foreground text-sm flex items-center justify-between">
           <span>{selectedIds.size} selected</span>
           <Button variant="ghost" size="sm" onClick={deselectAll}>
@@ -244,7 +251,25 @@ export function SidePanel() {
 
       {/* Content */}
       <main className="flex-1 overflow-hidden">
-        {showSearchResults ? <SearchResults /> : <BookmarkTree />}
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="h-full flex flex-col">
+          <TabsList className="mx-3 mt-2">
+            <TabsTrigger value="bookmarks" className="flex-1">
+              Bookmarks
+            </TabsTrigger>
+            <TabsTrigger value="snippets" className="flex-1">
+              <Code2 className="w-4 h-4 mr-2" />
+              Snippets
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="bookmarks" className="flex-1 mt-0 overflow-hidden">
+            {showSearchResults ? <SearchResults /> : <BookmarkTree />}
+          </TabsContent>
+
+          <TabsContent value="snippets" className="flex-1 mt-0 overflow-hidden">
+            <SnippetCatalogue />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Footer - minimal in side panel mode */}

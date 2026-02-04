@@ -122,7 +122,7 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
           // Could be URL or owner/repo
           if (input.includes('github.com')) {
             // Parse GitHub URL
-            const match = input.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/)
+            const match = input.match(/github\.com\/([^/]+)\/([^/?#]+)/)
             if (!match) throw new Error('Invalid GitHub repository URL')
             owner = match[1]
             repoName = match[2].replace('.git', '')
@@ -375,6 +375,7 @@ export function ShareToRepoDialog({ open, onOpenChange, folderId, folderName }: 
                     checked={newRepoPrivate}
                     onChange={(e) => setNewRepoPrivate(e.target.checked)}
                     className="rounded"
+                    title="Make repository private"
                   />
                   <Label htmlFor="repoPrivate">Make repository private</Label>
                 </div>

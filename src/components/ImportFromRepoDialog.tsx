@@ -180,6 +180,7 @@ export function ImportFromRepoDialog({ open, onOpenChange }: ImportFromRepoDialo
                 checked={skipDuplicates}
                 onChange={(e) => setSkipDuplicates(e.target.checked)}
                 className="rounded"
+                title="Skip duplicate URLs"
               />
               <Label htmlFor="skipDuplicates">Skip duplicate URLs</Label>
             </div>

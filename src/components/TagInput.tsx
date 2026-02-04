@@ -68,6 +68,8 @@ export function TagInput({
                 removeTag(tag)
               }}
               className="hover:bg-muted rounded-full"
+              title={`Remove ${tag}`}
+              aria-label={`Remove ${tag}`}
             >
               <X className="h-3 w-3" />
             </button>

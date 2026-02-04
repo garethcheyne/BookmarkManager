@@ -73,3 +73,6 @@ export {
   SelectItem,
   SelectSeparator,
 } from './select'
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
+export { Checkbox } from './checkbox'
+export { Alert, AlertTitle, AlertDescription } from './alert'

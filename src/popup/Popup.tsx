@@ -11,10 +11,12 @@ import {
   User,
   Link,
   FolderGit2,
+  Code2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/toaster'
-import { SearchBar, BookmarkTree, SearchResults, type SearchBarHandle } from '@/components'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SearchBar, BookmarkTree, SearchResults, SnippetCatalogue, type SearchBarHandle } from '@/components'
 import { useKeyboardShortcuts } from '@/hooks'
 import { useBookmarkStore, useSettingsStore, useGitHubStore } from '@/store'
 import { GitHubConnectDialog } from '@/components/GitHubConnectDialog'
@@ -43,6 +45,9 @@ export function Popup() {
 
   // Refs
   const searchBarRef = useRef<SearchBarHandle>(null)
+
+  // UI state
+  const [activeTab, setActiveTab] = useState<'bookmarks' | 'snippets'>('bookmarks')
 
   // Dialog states
   const [githubConnectOpen, setGithubConnectOpen] = useState(false)
@@ -194,14 +199,34 @@ export function Popup() {
         </div>
       </header>
 
-      {/* Search */}
-      <div className="p-3 border-b">
-        <SearchBar ref={searchBarRef} />
-      </div>
+      {/* Search - only show for bookmarks tab */}
+      {activeTab === 'bookmarks' && (
+        <div className="p-3 border-b">
+          <SearchBar ref={searchBarRef} />
+        </div>
+      )}
 
       {/* Content */}
       <main className="flex-1 min-h-0 overflow-hidden">
-        {showSearchResults ? <SearchResults /> : <BookmarkTree />}
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="h-full flex flex-col">
+          <TabsList className="mx-3 mt-2">
+            <TabsTrigger value="bookmarks" className="flex-1">
+              Bookmarks
+            </TabsTrigger>
+            <TabsTrigger value="snippets" className="flex-1">
+              <Code2 className="w-4 h-4 mr-2" />
+              Snippets
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="bookmarks" className="flex-1 mt-0 overflow-hidden">
+            {showSearchResults ? <SearchResults /> : <BookmarkTree />}
+          </TabsContent>
+
+          <TabsContent value="snippets" className="flex-1 mt-0 overflow-hidden">
+            <SnippetCatalogue />
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Footer */}

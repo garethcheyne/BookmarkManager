@@ -1,4 +1,4 @@
-import type { Bookmark, SharedCollection, SharedBookmark, ExportOptions, ImportOptions } from '@/types'
+import type { Bookmark, SharedCollection, SharedBookmark, ExportOptions, ImportOptions, Snippet, SharedSnippetCollection } from '@/types'
 import { bookmarksApi, metadataStorage } from './chrome-api'
 
 /**
@@ -430,3 +430,61 @@ export function downloadFile(content: string, filename: string, mimeType: string
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+/**
+ * Export snippets to JSON format
+ */
+export function exportSnippetsToJson(snippets: Snippet[]): string {
+  const collection: SharedSnippetCollection = {
+    version: '1.0',
+    metadata: {
+      name: 'Exported Snippets',
+      description: 'JavaScript snippets exported from BookStash',
+      author: '',
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      tags: [],
+      isPublic: false,
+      source: 'gist',
+    },
+    snippets: snippets.map((snippet) => ({
+      title: snippet.title,
+      description: snippet.description,
+      code: snippet.code,
+      tags: snippet.tags,
+      category: snippet.category,
+      language: snippet.language,
+      dateAdded: new Date(snippet.dateAdded).toISOString(),
+      dateModified: new Date(snippet.dateModified).toISOString(),
+    })),
+  }
+
+  return JSON.stringify(collection, null, 2)
+}
+
+/**
+ * Import snippets from JSON format
+ */
+export function importSnippetsFromJson(json: string): Snippet[] {
+  const collection: SharedSnippetCollection = JSON.parse(json)
+
+  if (!collection.snippets || !Array.isArray(collection.snippets)) {
+    throw new Error('Invalid snippet collection format')
+  }
+
+  return collection.snippets.map((sharedSnippet) => ({
+    id: crypto.randomUUID(),
+    title: sharedSnippet.title,
+    description: sharedSnippet.description,
+    code: sharedSnippet.code,
+    tags: sharedSnippet.tags,
+    category: sharedSnippet.category,
+    language: sharedSnippet.language || 'javascript',
+    dateAdded: sharedSnippet.dateAdded ? new Date(sharedSnippet.dateAdded).getTime() : Date.now(),
+    dateModified: sharedSnippet.dateModified
+      ? new Date(sharedSnippet.dateModified).getTime()
+      : Date.now(),
+    usageCount: 0,
+  }))
+}
+

@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/use-toast'
 import { useSettingsStore, useGitHubStore, useBookmarkStore } from '@/store'
-import { REPO_COLORS } from '@/store/githubStore'
+import { REPO_COLORS, type FolderShare } from '@/store/githubStore'
 import { GitHubConnectDialog } from '@/components/GitHubConnectDialog'
 import { exportToJson } from '@/lib/import-export'
 import versionInfo from '@/version.json'
@@ -38,7 +38,7 @@ export function Options() {
 
   // Group folder shares by repo/gist
   const groupedShares = useMemo(() => {
-    const groups: Record<string, { type: 'gist' | 'repo'; resourceId: string; url: string; name: string; folders: typeof folderSharesList }> = {}
+    const groups: Record<string, { type: 'gist' | 'repo'; resourceId: string; url: string; name: string; folders: FolderShare[] }> = {}
 
     Object.values(folderShares).forEach(share => {
       if (!groups[share.resourceId]) {
@@ -145,8 +145,6 @@ export function Options() {
     initializeGitHub()
     fetchBookmarks()
   }, [fetchSettings, initializeGitHub, fetchBookmarks])
-
-  const folderSharesList = Object.values(folderShares)
 
   const handleUnlink = async (folderId: string, folderName: string) => {
     if (confirm(`Unlink "${folderName}" from GitHub? This won't delete the file on GitHub.`)) {
